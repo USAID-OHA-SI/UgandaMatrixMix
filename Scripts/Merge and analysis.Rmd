@@ -1,0 +1,160 @@
+---
+title: "Merge, descripive and statistical analysis"
+author: "Nelly"
+date: "2024-03-15"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(extrafont)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(extrafont)
+library(patchwork)
+library(knitr)
+library(readr)
+library(openxlsx)
+library(stringr)
+```
+
+```{r}
+setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+```
+
+# set filepath
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+file_path <- "../Dataout/masterclientlist.csv"
+ml_dfclean <- read.csv(file_path)
+```
+
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+file_path <- "../Dataout/vldata.csv"
+vl_dfclean <- read.csv(file_path)
+```
+
+
+
+```{r}
+vl_dfclean %>% 
+    group_by(merge_id) %>% 
+    filter(n() > 1)
+```
+
+
+
+```{r}
+dupl <- vl_dfclean[vl_dfclean %>% 
+    select(merge_id, datetested) %>% 
+    duplicated(), ] 
+```
+
+
+```{r}
+vl_df_clean_wide<-vl_dfclean %>% 
+      group_by(merge_id) %>% 
+      filter(datetested == min(datetested) | datetested == max(datetested)) %>% 
+      mutate(type = ifelse(datetested == min(datetested), "start", "end")) %>% 
+      group_by(merge_id, type) %>% 
+      filter(row_number() == 1) %>% 
+      ungroup() %>% 
+      select(-result,-datetested) %>% 
+      pivot_wider(names_from = type,
+                  values_from = vlsup_cat)
+```
+
+```{r}
+vl_df_clean_wide<-vl_dfclean %>% 
+     group_by(merge_id) %>% 
+     mutate(rank = rank(datetested, ties.method = "first")) %>% 
+     filter(rank == min(rank) | rank == ceiling(max(rank)/2) | rank == max(rank)) %>% 
+     arrange(merge_id, datetested) %>%
+     mutate(rank = rank(rank)) %>% 
+     pivot_wider(names_from=rank, values_from = rank, names_prefix = "V")
+```
+
+
+```{r}
+
+vl_df_clean_wide <- vl_dfclean %>%
+  group_by(merge_id) %>% 
+  # Rank by date tested
+  mutate(rank = rank(datetested, ties.method = "first")) %>%
+  # Determine total number of observations per group
+  mutate(total = n()) %>%
+  # For groups with 3 or more, take first, middle, last
+  # For groups with 2, take first and last
+  # For groups with 1, take only available
+  filter(
+    (total >= 3 & (rank == 1 | rank == ceiling(total/2) | rank == total)) |
+    (total == 2 & (rank == 1 | rank == 2)) |
+    (total == 1 & rank == 1)
+  ) %>%
+  # Assign V1, V2, V3 based on filtered ranks
+  mutate(rank = case_when(
+    rank == 1 ~ "V1",
+    rank == 2 & total == 2 ~ "V2",
+    total >= 3 & rank == ceiling(total/2) ~ "V2",
+    rank == total ~ "V3"
+  )) %>%
+  # Pivot wider with names from the new rank
+  pivot_wider(
+    names_from = rank, 
+    values_from = c(result, datetested, vlsup_cat), 
+    names_prefix = ""
+  ) %>%
+  # Remove the group by status after pivoting
+  ungroup()
+
+# View the results to confirm
+print(vl_df_clean_wide)
+
+```
+
+
+## Perform a full join on ml_dfclean and vl_dfclean  using a common key'merge_id'
+```{r}
+
+df1 <- tidylog::full_join(ml_dfclean, vl_df_clean_wide, by = "merge_id")
+
+```
+# remove 343 clients observations without VL data 
+```{r}
+df1_filtered <- df1 %>%
+  dplyr::filter(!is.na(start) | !is.na(end))
+```
+
+Recoding the non intervention group 
+```{r}
+df1_filtered$intervention <- ifelse(is.na(df1_filtered$intervention), "Control", df1_filtered$intervention)
+
+```
+
+
+
+```{r}
+
+# Set the path to the folder where you want to save the CSV
+output_folder <- "C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024/dataout"
+
+# Define the full path to the CSV file within the output folder
+output_file_path <- file.path(output_folder, "merged_data.csv")
+
+# Write the vl_df1 DataFrame to the CSV file
+write.csv(df1_filtered, output_file_path, row.names = FALSE)
+
+```
+

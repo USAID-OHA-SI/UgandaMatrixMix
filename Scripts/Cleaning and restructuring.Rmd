@@ -1,0 +1,233 @@
+---
+title: "PCM_ uganda_2024"
+output: html_notebook
+---
+
+Load packages 
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(extrafont)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(extrafont)
+library(patchwork)
+library(knitr)
+library(readr)
+```
+Read data 
+```{r}
+df <- read_csv("PCM dataset Feb192024.csv")
+```
+```{r}
+df <- PCM_dataset_Feb192024
+```
+
+
+rename variables 
+```{r}
+names(df) <- c(
+  "region", "assessment_type", "district", "facility", "client_art", "merged_id",
+  "age", "sex", "hiv_services", "q1_reason", "no_hiv_symptom", "q3_symptoms",
+  "emotional_mental", "minimal_emo_mental", "family_support", "minimal_discrimination",
+  "q8_impact", "loan_sold", "nonsupp_start", "nonsupp_6months", "vls_suppressed_post",
+  "vl1", "vl1_date", "vl2", "vl2_date", "vl3", "vl3_date", "vl4", "vl4_date", "vl5", "vl5_date", "vl6", "vl6_date"
+)
+```
+
+
+```{r}
+#current year
+curr_year <- 2023
+```
+
+
+
+```{r}
+df <- df %>%
+  mutate(
+    region = as.factor(region),
+    assessment_type = as.character(assessment_type),
+    district = as.factor(district),
+    facility = as.factor(facility),
+    client_art = as.character(client_art),
+    merged_id = as.character(merged_id),
+    age = as.character(age),
+    sex = as.factor(sex),
+    hiv_services = as.factor(hiv_services),
+    q1_reason = as.character(q1_reason),
+    no_hiv_symptom = as.factor(no_hiv_symptom),
+    q3_symptoms = as.factor(q3_symptoms),
+    emotional_mental = as.factor(emotional_mental),
+    minimal_emo_mental = as.factor(minimal_emo_mental),
+    family_support = as.factor(family_support),
+    minimal_discrimination = as.factor(minimal_discrimination),
+    q8_impact = as.character(q8_impact),
+    loan_sold = as.factor(loan_sold),
+    nonsupp_start = as.factor(nonsupp_start),
+    nonsupp_6months = as.factor(nonsupp_6months),
+    vls_suppressed_post = as.factor(vls_suppressed_post),
+    vl1 = as.character(vl1),
+    vl1_date = as.Date(vl1_date, format = "%d-%b-%y"),
+    vl2 = as.character(vl2),
+    vl2_date = as.Date(vl2_date, format = "%d-%b-%y"),
+    vl3 = as.character(vl3),
+    vl3_date = as.Date(vl3_date, format = "%d-%b-%y"),
+    vl4 = as.character(vl4),
+    vl4_date = as.Date(vl4_date, format = "%d-%b-%y"),
+    vl5 = as.character(vl5),
+    vl5_date = as.Date(vl5_date, format = "%d-%b-%y"),
+    vl6 = as.character(vl6),
+    vl6_date = as.Date(vl6_date, format = "%d-%b-%y")
+  )
+
+#str(df)
+
+```
+```{r}
+
+df <- df %>%
+  separate("assessment_type", into = c("assessment", "cohort"), sep = " - ")
+
+#str(df)
+
+```
+#Making assessment and cohort categorical variables 
+```{r}
+df$assessment <- as.factor(df$assessment)
+df$cohort <- as.factor(df$cohort)
+```
+
+# looking for duplicates by merged_id
+```{r}
+non_unique_combinations <- df[duplicated(df[c("merged_id", "cohort")]) | duplicated(df[c("merged_id", "cohort")], fromLast = TRUE), c("merged_id", "cohort")]
+
+# Display non-unique combinations
+print(non_unique_combinations)
+
+```
+
+```{r}
+
+df <- df[!df$age %in% c("124"), ]  # Remove rows with "124"
+df$age <- gsub("[^0-9-]+", "", df$age)   # Keep only digits and hyphens in the age column
+df$age <- tolower(df$age)                # Convert age values to lowercase for consistency
+
+#str(df)
+
+
+```
+
+
+```{r}
+df$age <- ifelse(df$age %in% c("20", "21", "22"), "20-24", df$age)
+
+# Convert the "age" variable to a factor
+df$age <- factor(df$age, levels = unique(df$age), ordered = TRUE)
+
+```
+
+
+
+```{r}
+df$ vl2 <- gsub("[^0-9]+", "", df$ vl2)
+
+# Convert VL2 to numeric (optional)
+df$ vl2 <- as.numeric(df$ vl2)
+
+#str(df)
+
+```
+```{r}
+
+# Define a vector of VL columns
+vl_columns <- c("vl1","vl2", "vl3", "vl4", "vl5", "vl6")
+
+# Loop through each VL column
+for (i in seq_along(vl_columns)) {
+  vl_col <- vl_columns[i]
+  if (vl_col %in% names(df)) {
+    df[[vl_col]] <- gsub("[^0-9]+", "", df[[vl_col]])
+    df[[vl_col]] <- as.numeric(df[[vl_col]])
+  } else {
+    print(paste(vl_col, "column does not exist in the data frame."))
+  }
+}
+
+#str(df)
+
+
+```
+
+
+```{r}
+df_vl <- df[c("merged_id", "vl1", "vl1_date", "vl2", "vl2_date", "vl3", "vl3_date", "vl4", "vl4_date", "vl5", "vl5_date", "vl6", "vl6_date")]
+
+#str(df_vl)
+
+```
+#restructuring to long formart 
+```{r}
+
+# Melt the tibble to convert from wide to long format
+melted_df <- gather(df_vl, key = "Variable", value = "Value", -merged_id)
+
+# Extract Measurement, Date, and convert Date to the proper format
+melted_df$Measurement <- ifelse(grepl("Copies", melted_df$Value), melted_df$Value, NA)
+melted_df$Date <- ifelse(grepl("Date", melted_df$Variable), melted_df$Value, NA)
+melted_df$Date <- as.Date(melted_df$Date, format = "%Y-%m-%d")
+
+# Select relevant columns
+reshaped_df <- melted_df[, c("merged_id", "Date", "Measurement")]
+
+
+```
+
+
+
+
+```{r}
+
+# Convert vl1_date to character
+df_vl <- df_vl %>%
+  mutate_at(vars(starts_with("vl")), as.character)
+
+# # Pivot the data frame to long format
+# df_vl_restructured <- df_vl %>%
+#   pivot_longer(cols = starts_with("vl"),
+#                names_to = c(".value", "measurement"),
+#                names_sep = "_") %>%
+#   select(-measurement)  # Remove the measurement column created by pivot_longer
+
+
+# Assuming df_vl is your data frame
+df_vl_restructured <- df_vl %>%
+  pivot_longer(cols = starts_with("vl"),
+               names_to = c(".value", "measurement"),
+               names_sep = "",
+               values_to = "value") %>%
+  select(merged_id, age, sex, nonsupp_start, nonsupp_6months, vls_suppressed_post, value, vl_date)
+
+# Check the column names
+names(df_vl_restructured)
+
+
+
+# Check the restructured data frame
+head(df_vl_restructured)
+
+
+# Check the restructured data frame
+head(df_vl_restructured)
+
+
+```
+

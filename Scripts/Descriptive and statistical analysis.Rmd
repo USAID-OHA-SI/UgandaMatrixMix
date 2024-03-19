@@ -1,0 +1,376 @@
+---
+title: "Descriptive and statistical analysis"
+author: "Nelly"
+date: "2024-03-18"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(extrafont)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(extrafont)
+library(ggplot2)
+library(patchwork)
+library(knitr)
+library(readr)
+library(openxlsx)
+library(stringr)
+library(ggpol)
+library(nnet)
+```
+
+```{r}
+setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+```
+
+# set filepath
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+file_path <- "../Dataout/merged_data.csv"
+dfclean <- read.csv(file_path)
+```
+
+```{r}
+# Recode specified levels into a single category "Relatives"
+dfclean <- dfclean %>%
+  mutate(parenthood_status_combined = case_when(
+    parenthood_status %in% c("Work place", "wife", "Husband", 
+                             "Grand Parents", "Child headed", 
+                             "Caregiver mentor", "OVC") ~ "Relatives",
+    TRUE ~ as.character(parenthood_status)
+  ))
+```
+
+
+
+
+# recode variables to factors
+```{r}
+factor_columns <- c(
+  "assessment_type", "age", "sex", "recommend_services", "q1_impact",
+  "healthy_symptom_free_frequency", "symptoms_impacted_q1", "experienced_symptoms_last_2_weeks",
+  "problem_experience_last_2_weeks", "support_from_family_friends", "hiv_discrimination_past_month",
+  "factors_impacted_score_most", "hiv_treatment_expenses_loan_sold", "specific_expenses_for_treatment",
+  "art_dispensed_last_contact", "preferred_art_dispensed", "unsuppressed_calhiv_dsd_approach",
+  "preferred_hiv_services_method", "preferred_dsd_choice", "attach_to_chw",
+  "parenthood_status", "factors_impacted_score_most_aggregated", "intervention", "start", "end"
+)
+
+dfclean <- dfclean %>%
+  mutate(merge_id = as.character(merge_id))
+
+
+
+dfclean$interview_date <- as.Date(sub("^\\d+\\s+", "", dfclean$interview_date), format = "%Y-%m-%d")
+
+dfclean <- dfclean %>%
+  mutate_at(vars(all_of(factor_columns)), as.factor)
+```
+
+#descriptive statistics 
+
+```{r}
+# Assuming 'intervention' is a column in dfclean that indicates if a person is in the intervention,
+# and we're interested in only those with "Yes" in that column
+intervention_subset <- dfclean[dfclean$intervention == "intervention", ]
+
+# Now create the counts for the pyramid. I'm assuming the age groups are already binned.
+# If they're not, you'll need to bin them first into meaningful categories.
+age_sex_counts <- intervention_subset %>%
+  group_by(age, sex) %>%
+  summarise(count = n()) %>%
+  ungroup()
+# Negate the counts for one of the sexes to create the pyramid effect in the plot
+age_sex_counts <- age_sex_counts %>%
+  mutate(count = ifelse(sex == "Female", -count, count)) # Assuming "Female" is one of the levels in the 'sex' column
+
+# Now create the age-sex pyramid plot
+ggplot(age_sex_counts, aes(x = age, y = count, fill = sex)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # Flip the axes to put age on the y-axis
+  scale_y_continuous(labels = abs) +  # Use absolute values for count labels
+  labs(x = "Count", y = "Age Group", fill = "Sex", title = "Age-Sex Pyramid for Intervention Group") +
+  theme_minimal()
+
+```
+
+```{r}
+
+intervention_subset <- intervention_subset %>%
+  count(age, sex)  # Replace 'age' and 'sex' with actual group column names
+
+# 'n' will be a valid column containing counts of occurrences
+
+```
+
+
+
+```{r}
+#restructuring the data 
+intervention_subset$Count <- ifelse(intervention_subset$sex == "Male", -intervention_subset$n, intervention_subset$n)
+
+# 'age' column is ordered correctly
+intervention_subset$age <- factor(intervention_subset$age, levels = unique(intervention_subset$age[order(intervention_subset$n)]))
+
+# Set the factor levels for the 'age' variable
+intervention_subset$age <- factor(intervention_subset$age, 
+                                  levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years"))
+# Create the population pyramid plot with age levels in the specified order
+ggplot(intervention_subset, aes(x = age, y = Count, fill = sex)) +
+  geom_col() +
+  geom_text(aes(y = ifelse(Count > 0, Count/2, Count/2), label = abs(Count)),
+            position = position_stack(vjust = 0.5),
+            color = "white", 
+            fontface = "bold",
+            size = 2.5) +  # Adjust text size to fit within bars
+  scale_y_continuous(labels = abs) +
+  scale_fill_manual(values = c("Female" = "#8980CB", "Male" = "#287C6F")) +
+  coord_flip() +
+  labs(x = NULL, y = "Count",
+       title = "Participant distribution by age and sex",
+       caption = "Source: PCM 2024 data",
+       fill = "Sex") +
+  theme_minimal() +
+  theme(
+    plot.margin = unit(c(1, 1, 1, 1), "cm"),
+    panel.spacing = unit(0.05, "lines"),
+    panel.grid.major = element_blank(),  # Removes major grid lines
+    panel.grid.minor = element_blank(),  # Removes minor grid lines
+    plot.title = element_text(size = 13, face = "bold", hjust = 0, vjust = 4),  # Left aligns the title
+    strip.text = element_text(size = 11, vjust = 1),
+    axis.text.x = element_text(size = 9),
+    axis.text.y = element_text(size = 9),
+    plot.caption = element_text(size = 9, color = "grey50", hjust = 1, margin = margin(t = 15)),
+    legend.position = "none"
+  )
+
+```
+ # DISTRIBUTION by caregiver
+ 
+```{r}
+# Convert the combined parenthood status to a factor
+dfclean$parenthood_status_combined <- factor(dfclean$parenthood_status_combined)
+
+
+# create bar plot
+# count the number of each parenthood status
+# parenthood_counts <- dfclean %>%
+#   filter(intervention == "intervention") %>%
+#   count(parenthood_status_combined) %>%
+#   mutate(parenthood_status_combined = fct_infreq(parenthood_status_combined)) %>%
+#   mutate(percentage = n / sum(n) * 100) # Calculate percentages
+# 
+# # Plot
+# ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = parenthood_status_combined, label = scales::percent(percentage / 100))) +
+#   geom_bar(stat = "identity") +
+#   geom_text(vjust = -0.5, size = 3.5) + # Add percentage labels
+#   scale_fill_manual(values = c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6")) +
+#   theme_minimal() +
+#   labs(x = "Parenthood Status", y = "", title = "Parenthood Status for Intervention Participants") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
+#         legend.position = "none", # Hide legend
+#         panel.grid.major = element_blank(), # Remove major grid lines
+#         panel.grid.minor = element_blank(), # Remove minor grid lines
+#         plot.caption = element_text(hjust = 1)) + # Align caption to the right
+#   labs(caption = "Source: PCM 2024 data") # Add source caption
+
+```
+
+
+
+
+
+
+
+```{r}
+long_data <- dfclean %>%
+  select(merge_id, intervention, start, end) %>%
+  pivot_longer(cols = c(start, end), names_to = "time", values_to = "viral_load") %>%
+  mutate(time = fct_relevel(time, "start", "end")) %>%
+  filter(!is.na(viral_load))  # Exclude NA values
+
+# Summarize the data to get counts
+count_data <- long_data %>%
+  group_by(time, intervention, viral_load) %>%
+  summarise(count = n(), .groups = 'drop')
+
+# Create the plot with specified facet layout
+ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +  # Set nrow to 2 for the desired layout
+  theme_minimal() +
+  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention", fill = "Intervention") +
+  scale_fill_brewer(palette = "Set1")
+# Note: 'interaction(intervention, row_number())' creates a unique group for each row within each intervention group,
+# which ensures that the lines connect the start and end points for the same individual.
+# try dumbell plot remove NA  
+
+```
+
+
+
+
+
+
+```{r}
+long_data <- dfclean %>%
+  select(merge_id, intervention, start, end) %>%
+  pivot_longer(cols = c(start, end), names_to = "time", values_to = "viral_load") %>%
+  mutate(time = fct_relevel(time, "start", "end"))  # Reorder factor levels
+
+# Summarize the data to get counts
+count_data <- long_data %>%
+  group_by(time, intervention, viral_load) %>%
+  summarise(count = n(), .groups = 'drop')
+
+# Create the plot
+ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ viral_load, scales = "free_y") +
+  theme_minimal() +
+  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention", fill = "Intervention") +
+  scale_fill_brewer(palette = "Set1")
+```
+
+
+
+
+
+
+#Statistical analysis  
+
+```{r}
+df_stat<- df_stat <- dfclean %>%
+  select(
+    merge_id,
+    age,
+    sex,
+    recommend_services,
+    healthy_symptom_free_frequency,
+    problem_experience_last_2_weeks,
+    support_from_family_friends,
+    hiv_discrimination_past_month,
+    factors_impacted_score_most,
+    hiv_treatment_expenses_loan_sold,
+    preferred_hiv_services_method,
+    attach_to_chw,
+    parenthood_status_combined,
+    intervention,
+    start,
+    end
+  )
+```
+
+
+#Categorize CALHIV Participants into VLS Groups:
+```{r}
+df_stat_intervention <- df_stat %>%
+  filter(intervention == "intervention")
+
+# Categorizing participants based on viral load states, only for those with intervention
+df_stat_intervention$VLS_group <- case_when(
+  df_stat_intervention$start == "suppressed" & df_stat_intervention$end == "suppressed" ~ "Suppressed",
+  df_stat_intervention$start != df_stat_intervention$end & !is.na(df_stat_intervention$start) & !is.na(df_stat_intervention$end) ~ "Cycling",
+  is.na(df_stat_intervention$start) | is.na(df_stat_intervention$end) ~ "Data Missing", # Handle NAs if any
+  TRUE ~ "Never suppressed" # The rest are considered never suppressed
+)
+
+```
+
+
+
+```{r}
+# Filtering out rows with missing start or end data, then categorizing
+df_stat_intervention <- df_stat %>%
+  filter(intervention == "intervention", !is.na(start), !is.na(end)) %>%
+  mutate(
+    VLS_group = case_when(
+      start == "unsuppressed" & end == "undetectable" ~ "Suppressed",  # New condition
+      start == "suppressed" & end == "suppressed" ~ "Suppressed",
+      start =="unsuppressed" & end == "suppressed"~ "Suppressed",
+      start =="undetectable" & end == "suppressed" ~"Suppressed",
+      start != end ~ "Cycling",
+      TRUE ~ "Never suppressed"  # The rest are considered never suppressed
+    )
+  )
+
+# Creating the table
+vls_table <- table(df_stat_intervention$VLS_group)
+
+# Display the table
+vls_table
+
+```
+
+```{r}
+# List of variables to test
+variables_to_test <- c("recommend_services", "healthy_symptom_free_frequency", 
+                       "problem_experience_last_2_weeks", "support_from_family_friends", 
+                       "hiv_discrimination_past_month", "hiv_treatment_expenses_loan_sold", 
+                       "preferred_hiv_services_method", "attach_to_chw", "parenthood_status_combined")
+
+# Perform Chi-square tests
+for(var in variables_to_test) {
+  cat("Chi-square test for:", var, "\n")
+  # Remove rows with NA in current variable or VLS_group
+  temp_data <- df_stat_intervention %>%
+    filter(!is.na(.data[[var]]), !is.na(VLS_group))
+  
+  # Create contingency table
+  table <- table(temp_data[[var]], temp_data$VLS_group)
+  
+  # Perform Chi-square test
+  test <- chisq.test(table)
+  print(test)
+  cat("\n")
+}
+
+```
+#Explore Associations Between PCM Responses and VLS Outcomes:
+
+```{r}
+# Examining associations using Chi-square test
+table_symptoms_VLS <- table(df_stat_intervention$healthy_symptom_free_frequency, df_stat_intervention$VLS_group)
+chisq.test(table_symptoms_VLS)
+
+table_mental_health_VLS <- table(df_stat_intervention$support_from_family_friends, df_stat_intervention$VLS_group)
+chisq.test(table_mental_health_VLS)
+
+table_stigma_VLS <- table(df_stat_intervention$hiv_discrimination_past_month, df_stat_intervention$VLS_group)
+chisq.test(table_stigma_VLS)
+
+```
+```{r}
+# Install and load the nnet package for multinomial logistic regression
+#if(!require(nnet)) install.packages("nnet")
+
+# Fit a multinomial logistic regression model
+# VLS_group is the outcome
+multinom_model <- multinom(VLS_group ~ age + sex + recommend_services +
+                            healthy_symptom_free_frequency + problem_experience_last_2_weeks +
+                            support_from_family_friends + hiv_discrimination_past_month +
+                            hiv_treatment_expenses_loan_sold +
+                            preferred_hiv_services_method + attach_to_chw +
+                            parenthood_status_combined,
+                            data = df_stat_intervention)
+
+# Summary of the model
+summary(multinom_model)
+
+# To predict probabilities of each category for new observations, you can use:
+# predicted_probs <- predict(multinom_model, newdata, type="probs")
+
+```
+

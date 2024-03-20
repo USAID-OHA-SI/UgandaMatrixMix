@@ -31,7 +31,7 @@ library(nnet)
 ```
 
 ```{r}
-setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+setwd("C:/Users/nmaina/Documents/R.Projects/UgandaMatrixMix")
 ```
 
 # set filepath
@@ -65,7 +65,7 @@ factor_columns <- c(
   "factors_impacted_score_most", "hiv_treatment_expenses_loan_sold", "specific_expenses_for_treatment",
   "art_dispensed_last_contact", "preferred_art_dispensed", "unsuppressed_calhiv_dsd_approach",
   "preferred_hiv_services_method", "preferred_dsd_choice", "attach_to_chw",
-  "parenthood_status", "factors_impacted_score_most_aggregated", "intervention", "start", "end"
+  "parenthood_status", "factors_impacted_score_most_aggregated", "intervention", "vlsup_cat_V1", "vlsup_cat_V2","vlsup_cat_V3"
 )
 
 dfclean <- dfclean %>%
@@ -82,12 +82,10 @@ dfclean <- dfclean %>%
 #descriptive statistics 
 
 ```{r}
-# Assuming 'intervention' is a column in dfclean that indicates if a person is in the intervention,
 # and we're interested in only those with "Yes" in that column
 intervention_subset <- dfclean[dfclean$intervention == "intervention", ]
 
-# Now create the counts for the pyramid. I'm assuming the age groups are already binned.
-# If they're not, you'll need to bin them first into meaningful categories.
+# create the counts for the pyramid.
 age_sex_counts <- intervention_subset %>%
   group_by(age, sex) %>%
   summarise(count = n()) %>%
@@ -96,7 +94,7 @@ age_sex_counts <- intervention_subset %>%
 age_sex_counts <- age_sex_counts %>%
   mutate(count = ifelse(sex == "Female", -count, count)) # Assuming "Female" is one of the levels in the 'sex' column
 
-# Now create the age-sex pyramid plot
+# create the age-sex pyramid plot
 ggplot(age_sex_counts, aes(x = age, y = count, fill = sex)) +
   geom_bar(stat = "identity") +
   coord_flip() +  # Flip the axes to put age on the y-axis
@@ -164,41 +162,35 @@ ggplot(intervention_subset, aes(x = age, y = Count, fill = sex)) +
 dfclean$parenthood_status_combined <- factor(dfclean$parenthood_status_combined)
 
 
-# create bar plot
+#create bar plot
 # count the number of each parenthood status
-# parenthood_counts <- dfclean %>%
-#   filter(intervention == "intervention") %>%
-#   count(parenthood_status_combined) %>%
-#   mutate(parenthood_status_combined = fct_infreq(parenthood_status_combined)) %>%
-#   mutate(percentage = n / sum(n) * 100) # Calculate percentages
-# 
-# # Plot
-# ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = parenthood_status_combined, label = scales::percent(percentage / 100))) +
-#   geom_bar(stat = "identity") +
-#   geom_text(vjust = -0.5, size = 3.5) + # Add percentage labels
-#   scale_fill_manual(values = c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6")) +
-#   theme_minimal() +
-#   labs(x = "Parenthood Status", y = "", title = "Parenthood Status for Intervention Participants") +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
-#         legend.position = "none", # Hide legend
-#         panel.grid.major = element_blank(), # Remove major grid lines
-#         panel.grid.minor = element_blank(), # Remove minor grid lines
-#         plot.caption = element_text(hjust = 1)) + # Align caption to the right
-#   labs(caption = "Source: PCM 2024 data") # Add source caption
+parenthood_counts <- dfclean %>%
+filter(intervention == "intervention") %>%
+count(parenthood_status_combined) %>%
+mutate(parenthood_status_combined = fct_infreq(parenthood_status_combined)) %>%
+mutate(percentage = n / sum(n) * 100) # Calculate percentages
+
+# Plot
+ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = parenthood_status_combined, label = scales::percent(percentage / 100))) +
+ geom_bar(stat = "identity") +
+  geom_text(vjust = -0.5, size = 3.5) + # Add percentage labels
+  scale_fill_manual(values = c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6")) +
+  theme_minimal() +
+ labs(x = "Parenthood Status", y = "", title = "Parenthood Status for Intervention Participants") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
+      legend.position = "none", # Hide legend
+     panel.grid.major = element_blank(), # Remove major grid lines
+     panel.grid.minor = element_blank(), # Remove minor grid lines
+      plot.caption = element_text(hjust = 1)) + # Align caption to the right
+ labs(caption = "Source: PCM 2024 data") # Add source caption
 
 ```
 
-
-
-
-
-
-
 ```{r}
 long_data <- dfclean %>%
-  select(merge_id, intervention, start, end) %>%
-  pivot_longer(cols = c(start, end), names_to = "time", values_to = "viral_load") %>%
-  mutate(time = fct_relevel(time, "start", "end")) %>%
+  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V3) %>%
+  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
+  mutate(time = fct_relevel(time, "vlsup_cat_V1", "vlsup_cat_V3")) %>%
   filter(!is.na(viral_load))  # Exclude NA values
 
 # Summarize the data to get counts
@@ -222,34 +214,7 @@ ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
 
 
 
-
-
-```{r}
-long_data <- dfclean %>%
-  select(merge_id, intervention, start, end) %>%
-  pivot_longer(cols = c(start, end), names_to = "time", values_to = "viral_load") %>%
-  mutate(time = fct_relevel(time, "start", "end"))  # Reorder factor levels
-
-# Summarize the data to get counts
-count_data <- long_data %>%
-  group_by(time, intervention, viral_load) %>%
-  summarise(count = n(), .groups = 'drop')
-
-# Create the plot
-ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~ viral_load, scales = "free_y") +
-  theme_minimal() +
-  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention", fill = "Intervention") +
-  scale_fill_brewer(palette = "Set1")
-```
-
-
-
-
-
-
-#Statistical analysis  
+#creating final anaysis dataframe 
 
 ```{r}
 df_stat<- df_stat <- dfclean %>%
@@ -268,46 +233,100 @@ df_stat<- df_stat <- dfclean %>%
     attach_to_chw,
     parenthood_status_combined,
     intervention,
-    start,
-    end
+    vlsup_cat_V1,
+    vlsup_cat_V2,
+    vlsup_cat_V3,
   )
 ```
 
 
 #Categorize CALHIV Participants into VLS Groups:
 ```{r}
-df_stat_intervention <- df_stat %>%
-  filter(intervention == "intervention")
-
-# Categorizing participants based on viral load states, only for those with intervention
-df_stat_intervention$VLS_group <- case_when(
-  df_stat_intervention$start == "suppressed" & df_stat_intervention$end == "suppressed" ~ "Suppressed",
-  df_stat_intervention$start != df_stat_intervention$end & !is.na(df_stat_intervention$start) & !is.na(df_stat_intervention$end) ~ "Cycling",
-  is.na(df_stat_intervention$start) | is.na(df_stat_intervention$end) ~ "Data Missing", # Handle NAs if any
-  TRUE ~ "Never suppressed" # The rest are considered never suppressed
-)
+# df_stat_intervention <- df_stat %>%
+#   filter(intervention == "intervention")
+# 
+# # Categorizing participants based on viral load states, only for those with intervention
+# df_stat_intervention$VLS_group <- case_when(
+#   df_stat_intervention$vlsup_cat_V1 == "suppressed" & df_stat_intervention$vlsup_cat_V3 == "suppressed" ~ "Suppressed",
+#   df_stat_intervention$vlsup_cat_V1 != df_stat_intervention$vlsup_cat_V3 & !is.na(df_stat_intervention$vlsup_cat_V1) & !is.na(df_stat_intervention$vlsup_cat_V3) ~ "Cycling",
+#   is.na(df_stat_intervention$vlsup_cat_V1) | is.na(df_stat_intervention$vlsup_cat_V3) ~ "Data Missing", # Handle NAs if any
+#   TRUE ~ "Never suppressed" # The rest are considered never suppressed
+# )
 
 ```
 
 
 
 ```{r}
+# categorize 3 viral load categories.
+
+df_stat <- df_stat %>%
+  mutate(VLS_group3_draws = case_when(
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "Never suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",  
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "cycling",
+    TRUE ~ NA_character_  # This line handles cases that don't match any condition
+  ))
+
+# Check the first few rows to confirm the new variable is created as expected
+head(df_stat)
+
+```
+
+
+
+```{r}
+# Create a summary table
+vls_group_summary <- df_stat %>%
+  group_by(intervention, VLS_group3_draws) %>%
+  summarise(Count = n())
+
+# Print the summary table
+print(vls_group_summary)
+```
+
+```{r}
 # Filtering out rows with missing start or end data, then categorizing
-df_stat_intervention <- df_stat %>%
-  filter(intervention == "intervention", !is.na(start), !is.na(end)) %>%
+df_stat <- df_stat %>%
   mutate(
-    VLS_group = case_when(
-      start == "unsuppressed" & end == "undetectable" ~ "Suppressed",  # New condition
-      start == "suppressed" & end == "suppressed" ~ "Suppressed",
-      start =="unsuppressed" & end == "suppressed"~ "Suppressed",
-      start =="undetectable" & end == "suppressed" ~"Suppressed",
-      start != end ~ "Cycling",
-      TRUE ~ "Never suppressed"  # The rest are considered never suppressed
+    VLS_group2_draw = case_when(
+      is.na(vlsup_cat_V2) & vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "Suppressed",
+      is.na(vlsup_cat_V2) & vlsup_cat_V1 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "Suppressed",
+      is.na(vlsup_cat_V2) & vlsup_cat_V1 =="unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "Suppressed",
+      is.na(vlsup_cat_V2) & vlsup_cat_V1 =="undetectable" & vlsup_cat_V3 == "suppressed" ~ "Suppressed",
+      is.na(vlsup_cat_V2) & vlsup_cat_V1 != vlsup_cat_V3 ~ "Cycling",
+      is.na(vlsup_cat_V2) ~ "Never suppressed",  # Apply this condition when vlsup_cat_V2 is NA
+      TRUE ~ "NA"  # For cases where vlsup_cat_V2 is not NA
     )
   )
 
 # Creating the table
-vls_table <- table(df_stat_intervention$VLS_group)
+vls_table <- table(df_stat$VLS_group2_draw)
 
 # Display the table
 vls_table

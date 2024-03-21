@@ -210,13 +210,13 @@ df4_summary <- df4 %>%
 # Write the df4 DataFrame to the CSV file
 ```{r}
 # Set the path to the folder where you want to save the CSV
-output_folder <- "C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024/dataout"
+output_folder <- "Dataout"
 
 # Define the full path to the CSV file within the output folder
 output_file_path <- file.path(output_folder, "masterclientlist.csv")
 
 # Write the vl_df1 DataFrame to the CSV file
-write.csv(df4, output_file_path, row.names = FALSE)
+write_csv(df4, output_file_path, na = "")
 
 ```
 

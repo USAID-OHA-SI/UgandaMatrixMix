@@ -30,7 +30,6 @@ library(knitr)
 library(readr)
 library(openxlsx)
 library(stringr)
-library(janitor)
 ```
 
 ```{r}

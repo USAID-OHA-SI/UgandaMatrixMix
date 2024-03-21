@@ -122,57 +122,18 @@ vl_df_clean <- vl_df1 %>%
 # delete any merge id observation that occurs once 
 
 ```{r}
-# Count the occurrences of each merge_id
-merge_id_counts <- vl_df1 %>%
-  group_by(merge_id) %>%
-  summarise(count = n()) %>%
+vl_df1_filtered <- vl_df1 %>% 
+  group_by(merge_id) %>% 
+  filter(n() == 1) %>% 
   ungroup()
-
-# Filter to find merge_ids that occur exactly once
-single_occurrence_merge_ids <- merge_id_counts %>%
-  filter(count == 1)
-
 ```
-```{r}
-dupl <- vl_df1[vl_df1 %>% 
-    select(merge_id, datetested) %>% 
-    duplicated(), ] 
-```
-
-
-```{r}
-vl_df1 %>% 
-      group_by(merge_id, datetested) %>% 
-      filter(n() > 1) %>% 
-      View()
-```
-
-
-
-# delete 2180 merge_ids with  single viral load 
-
-```{r}
-# Add an identifier to mark single occurrence merge_ids
-single_occurrence_merge_ids <- single_occurrence_merge_ids %>%
-  mutate(single_occurrence = TRUE)
-
-# Join this back to the original dataframe and filter out rows where merge_id occurs once
-vl_df1_filtered <- vl_df1 %>%
-  left_join(single_occurrence_merge_ids, by = "merge_id") %>%
-  filter(is.na(single_occurrence)) %>%
-  select(-single_occurrence, -count)  # Remove the helper columns
-
-# vl_df1_filtered now contains rows where merge_id occurs more than once
-
-```
-
-
 
 # Write the vl_df1 DataFrame to the CSV file
 
+
 ```{r}
 # Set the path to the folder where you want to save the CSV
-output_folder <- "C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024/dataout"
+output_folder <- "Dataout"
 
 # Define the full path to the CSV file within the output folder
 output_file_path <- file.path(output_folder, "vldata.csv")

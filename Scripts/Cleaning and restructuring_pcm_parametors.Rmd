@@ -156,10 +156,8 @@ Removing second occurrence of duplicate
 ```{r}
 df_clean2<- df_clean %>%
   group_by(merge_id, assessment_type, interview_date) %>%  # Group by the specified columns
-  mutate(occurrence = row_number()) %>%  # Number each row within its group
-  filter(occurrence == 1) %>%  # Keep only the first occurrence
-  ungroup() %>%  # Remove the grouping
-  select(-occurrence)
+  filter(row_number() == 1) %>%  # Keep only the first occurrence
+  ungroup()  # Remove the grouping
 ```
 
 13 duplicates were identified, 

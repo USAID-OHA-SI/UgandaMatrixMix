@@ -95,12 +95,10 @@ df <- df %>%
 ```{r}
 
 df <- df %>%
-  mutate(experienced_symptoms_last_2_weeks = case_when(
-    str_detect(experienced_symptoms_last_2_weeks, "Belief and behavior of your family toward you") ~ "Belief and behaviour of your family toward you",
-    str_detect(experienced_symptoms_last_2_weeks, "Belief and behavior of the community toward you") ~ "Belief and behaviour of the community toward you",
-    str_detect(experienced_symptoms_last_2_weeks, "Attitude and behavior of clinic staff toward you") ~ "Attitude and behaviour of clinic staff toward you",
-    TRUE ~ "Other"
-  ))
+  mutate(symptoms_2w_family = str_detect(experienced_symptoms_last_2_weeks, "Belief and behavior of your family toward you"),
+         symptoms_2w_community = str_detect(experienced_symptoms_last_2_weeks, "Belief and behavior of the community toward you"),
+         symptoms_2w_staff = str_detect(experienced_symptoms_last_2_weeks, "Attitude and behavior of clinic staff toward you"),
+         )
 
 
 ```
@@ -110,7 +108,7 @@ df <- df %>%
 # Define a vector of variable names that need type conversion
 factor_columns <- c("district", "facility", "assessment_type", "setting", "age", "sex", "art_duration",
                     "appt_missed_last_12_months", "recommend_services", "q1_impact", "healthy_symptom_free_frequency",
-                    "symptoms_impacted_q1", "experienced_symptoms_last_2_weeks", "problem_experience_last_2_weeks",
+                    "symptoms_impacted_q1", "problem_experience_last_2_weeks",
                     "support_from_family_friends", "hiv_discrimination_past_month", "factors_impacted_score_most",
                     "hiv_treatment_expenses_loan_sold", "specific_expenses_for_treatment", "art_dispensed_last_contact",
                     "preferred_art_dispensed", "unsuppressed_calhiv_dsd_approach", "preferred_hiv_services_method",

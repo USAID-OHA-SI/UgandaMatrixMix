@@ -90,7 +90,8 @@ df1_filtered <- df1 %>%
 
 Recoding the non intervention group 
 ```{r}
-df1$intervention <- ifelse(is.na(df1$intervention), "No", df1$intervention)
+df1 <- df1 %>% 
+  mutate(intervention = ifelse(is.na(intervention), "No", intervention))
 
 ```
 

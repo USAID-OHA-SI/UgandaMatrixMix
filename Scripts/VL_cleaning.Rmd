@@ -91,7 +91,7 @@ This code dose the following
 <!-- Remove any rows where result is exactly "0". -->
 
 ```{r}
-vl_df_clean <- vl_df1 %>%
+vl_df1 <- vl_df1 %>%
   # Replace "Target Not Detected" with "< 20 Copies / mL"
   # Extract numeric part from result, replace commas to handle thousands
   mutate(vl_copies = ifelse(result == "Target Not Detected",

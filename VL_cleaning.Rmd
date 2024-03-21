@@ -53,8 +53,9 @@ vl_df <- vl_df %>%
   mutate(datetested = as_date(datetested))
 
 #check no missing dates
-# vl_df %>% 
-#   filter(is.na(datetested))
+vl_df %>%
+  filter(is.na(datetested)) %>% 
+  nrow() == 0
 
 ```
 
@@ -80,7 +81,7 @@ duplicates_all_columns <- vl_df1[duplicated(vl_df1), ] # we have 6324 duplicates
 #deletes all the duplicates 
 ```{r}
 # Remove duplicate rows based on all columns, keeping the first occurrence
-vl_df1 <- vl_df1[!duplicated(vl_df1), ]
+vl_df1 <- distinct(vl_df1)
 ```
 
 

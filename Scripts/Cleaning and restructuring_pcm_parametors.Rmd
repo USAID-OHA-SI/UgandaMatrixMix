@@ -115,11 +115,8 @@ factor_columns <- c("district", "facility", "assessment_type", "setting", "age",
 
 df <- df %>%
   mutate(client_art = as.character(client_art),
-         merge_id = as.character(merge_id))
-
-
-
-df$interview_date <- as.Date(sub("^\\d+\\s+", "", df$interview_date), format = "%Y-%m-%d")
+         merge_id = as.character(merge_id),
+         interview_date = as_date(interview_date))
 
 # Check the structure of the modified data frame
 

@@ -1,6 +1,8 @@
 ---
 title: "PCM_ uganda_2024"
 output: html_notebook
+editor_options: 
+  chunk_output_type: console
 ---
 
 Load packages 
@@ -26,14 +28,14 @@ library(openxlsx)
 ```
 
 ```{r}
-setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+# setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
 ```
 
 # set filepath
 ```{r}
 # data_folder <- "Data"
 # data_folder %>% return_latest()
-file_path <- "../Data/PCM_Acholi 26 Feb.xlsx"
+file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
 PCM_Acholi_26_Feb <- read_excel(file_path)
 ```
 

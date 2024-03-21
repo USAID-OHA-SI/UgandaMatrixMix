@@ -93,17 +93,20 @@ This code dose the following
 ```{r}
 vl_df_clean <- vl_df1 %>%
   # Replace "Target Not Detected" with "< 20 Copies / mL"
-  mutate(result = ifelse(result == "Target Not Detected", "< 20 Copies / mL", result),
-         # Extract numeric part from result, replace commas to handle thousands
-         vl_copies = as.numeric(str_replace_all(str_extract(result, "[0-9,]+"), ",", ""))) %>%
+  # Extract numeric part from result, replace commas to handle thousands
+  mutate(vl_copies = ifelse(result == "Target Not Detected",
+                            20, # Replace "Target Not Detected" with "< 20 Copies / mL"
+                            result %>% 
+                              str_extract("[0-9,]+") %>% 
+                              str_remove_all(",") %>% 
+                              as.numeric()))  %>%
   # Remove rows where result is exactly "0" or "0 Copies / mL"
   filter(result != "0", result != "0 Copies / mL") %>%
   # Classify viral load based on the extracted numbers
   mutate(vlsup_cat = case_when(
-    result == "< 200 Copies / mL" ~ "undetectable",
-    vl_copies < 200 ~ "undetectable", 
-    vl_copies > 1000 ~ "unsuppressed",
+    vl_copies <= 200  ~ "undetectable", 
     vl_copies <= 1000 ~ "suppressed",
+    vl_copies  > 1000 ~ "unsuppressed",
     TRUE ~ "unknown"
   )) %>%
   # Remove the temporary 'vl_copies' column

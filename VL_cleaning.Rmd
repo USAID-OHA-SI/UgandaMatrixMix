@@ -43,7 +43,8 @@ library(janitor)
 # data_folder %>% return_latest()
 file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
 vl_df <- read_excel(file_path, sheet = "VL for all CALHIV",
-                    .name_repair = make_clean_names)
+                    .name_repair = make_clean_names) %>% 
+  rename(result = results)
 ```
 
 Parse the date variable 

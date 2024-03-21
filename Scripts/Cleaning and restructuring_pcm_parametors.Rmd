@@ -36,13 +36,13 @@ library(openxlsx)
 # data_folder <- "Data"
 # data_folder %>% return_latest()
 file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
-PCM_Acholi_26_Feb <- read_excel(file_path)
 ```
 
 
 Read data 
 ```{r}
-df <- read_excel(file_path)
+df <- read_excel(file_path,
+                 "Other Parameters")
 ```
 
 
@@ -60,14 +60,6 @@ names(df) <- c("interview_date", "district", "facility", "client_art", "merge_id
                "preferred_hiv_services_method", "preferred_dsd_choice", "attach_to_chw", "parenthood_status")
 
 ```
-
-
-
-```{r}
-#current year
-curr_year <- 2024
-```
-
 
 #recode Interview questions  
 q1_impact 

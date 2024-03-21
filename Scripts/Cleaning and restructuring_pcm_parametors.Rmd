@@ -64,20 +64,20 @@ names(df) <- c("interview_date", "district", "facility", "client_art", "merge_id
 #recode Interview questions  
 q1_impact 
 ```{r}
-df$q1_impact <- recode(df$q1_impact,
-  "Not interested" = "No data",
-  "Minor" = "No data",
-  "Drugs out of stock" = "Other",
-  "No youths corner" = "Other",
-  "its hard to swallow ART Drugs daily." = "Other",
-  "Counselling given from facility has helped alot" = "Access to useful information",
-  "Adherence counselling" = "Access to useful information",
-  "She is a transfer out to TASO Gulu" =  "Other",
-  "Self stigma" = "Other",
-  "None of the above" = "Other",
-  
-  .default = df$q1_impact
-)
+df <- df %>% 
+  mutate(q1_impact =  recode(q1_impact,
+                             "Not interested" = "No data",
+                             "Minor" = "No data",
+                             "Drugs out of stock" = "Other",
+                             "No youths corner" = "Other",
+                             "its hard to swallow ART Drugs daily." = "Other",
+                             "Counselling given from facility has helped alot" = "Access to useful information",
+                             "Adherence counselling" = "Access to useful information",
+                             "She is a transfer out to TASO Gulu" =  "Other",
+                             "Self stigma" = "Other",
+                             "None of the above" = "Other",
+                             .default = df$q1_impact
+  ))
 
 ```
 

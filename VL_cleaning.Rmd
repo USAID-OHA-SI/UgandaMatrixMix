@@ -44,7 +44,8 @@ library(janitor)
 file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
 vl_df <- read_excel(file_path, sheet = "VL for all CALHIV",
                     .name_repair = make_clean_names) %>% 
-  rename(result = results)
+  rename(result = results,
+         merge_id = merged_id)
 ```
 
 Parse the date variable 
@@ -116,9 +117,7 @@ vl_df_clean <- vl_df1 %>%
 
 4890 unique merge_id in this vl_df1 
 ```{r}
- vl_df1 %>%
-  summarise(n_unique_merge_id = n_distinct(merge_id)) %>%
-  pull(n_unique_merge_id)
+  n_distinct(vl_df1$merge_id)
 ```
 # delete any merge id observation that occurs once 
 

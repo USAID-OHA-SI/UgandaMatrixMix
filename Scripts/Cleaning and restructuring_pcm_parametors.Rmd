@@ -139,7 +139,7 @@ df<- df %>%
 # looking for duplicates deleted 4 duplicate observations
 ```{r}
 # Remove duplicate rows, keeping only the first occurrence
-df_clean <- df[!duplicated(df) & !duplicated(df, fromLast = TRUE), ]
+df_clean <- distinct(df)
 
 ```
 

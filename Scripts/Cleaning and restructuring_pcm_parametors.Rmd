@@ -213,10 +213,10 @@ df4_summary <- df4 %>%
 output_folder <- "Dataout"
 
 # Define the full path to the CSV file within the output folder
-output_file_path <- file.path(output_folder, "masterclientlist.csv")
+output_file_path <- file.path(output_folder, "masterclientlist.rds")
 
 # Write the vl_df1 DataFrame to the CSV file
-write_csv(df4, output_file_path, na = "")
+write_rds(df4, output_file_path)
 
 ```
 

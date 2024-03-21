@@ -135,10 +135,10 @@ vl_df1_filtered <- vl_df1 %>%
 output_folder <- "Dataout"
 
 # Define the full path to the CSV file within the output folder
-output_file_path <- file.path(output_folder, "vldata.csv")
+output_file_path <- file.path(output_folder, "vldata.rds")
 
 # Write the vl_df1 DataFrame to the CSV file
-write_csv(vl_df1_filtered, output_file_path)
+write_rds(vl_df1_filtered, output_file_path)
 
 ```
 

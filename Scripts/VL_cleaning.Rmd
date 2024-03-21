@@ -33,7 +33,7 @@ library(stringr)
 ```
 
 ```{r}
-setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+setwd("C:/Users/nmaina/Documents/R.Projects/UgandaMatrixMix")
 ```
 
 # set filepath
@@ -169,7 +169,7 @@ vl_df1_filtered <- vl_df_clean %>%
 
 ```{r}
 # Set the path to the folder where you want to save the CSV
-output_folder <- "C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024/dataout"
+output_folder <- "C:/Users/nmaina/Documents/R.Projects/UgandaMatrixMix/dataout"
 
 # Define the full path to the CSV file within the output folder
 output_file_path <- file.path(output_folder, "vldata.csv")

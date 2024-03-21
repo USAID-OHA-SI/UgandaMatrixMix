@@ -2,7 +2,10 @@
 title: "Merge, descripive and statistical analysis"
 author: "Nelly"
 date: "2024-03-15"
-output: html_document
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r}
@@ -89,40 +92,40 @@ vl_df_clean_wide<-vl_dfclean %>%
 
 ```{r}
 
-vl_df_clean_wide <- vl_dfclean %>%
-  group_by(merge_id) %>% 
-  # Rank by date tested
-  mutate(rank = rank(datetested, ties.method = "first")) %>%
-  # Determine total number of observations per group
-  mutate(total = n()) %>%
-  # For groups with 3 or more, take first, middle, last
-  # For groups with 2, take first and last
-  # For groups with 1, take only available
-  filter(
-    (total >= 3 & (rank == 1 | rank == ceiling(total/2) | rank == total)) |
-    (total == 2 & (rank == 1 | rank == 2)) |
-    (total == 1 & rank == 1)
-  ) %>%
-  # Assign V1, V2, V3 based on filtered ranks
-  mutate(rank = case_when(
-    rank == 1 ~ "V1",
-    rank == 2 & total == 2 ~ "V2",
-    total >= 3 & rank == ceiling(total/2) ~ "V2",
-    rank == total ~ "V3"
-  )) %>%
-  # Pivot wider with names from the new rank
-  pivot_wider(
-    names_from = rank, 
-    values_from = c(result, datetested, vlsup_cat), 
-    names_prefix = ""
-  ) %>%
-  # Remove the group by status after pivoting
-  ungroup() %>% 
- # mutate(vlsup_cat_V3 = ifelse(is.null(vlsup_cat_V3), vlsup_cat_V3, vlsup_cat_V2))
-
-
-# View the results to confirm
-print(vl_df_clean_wide)
+ vl_df_clean_wide <- vl_dfclean %>%
+   group_by(merge_id) %>% 
+   # Rank by date tested
+   mutate(rank = rank(datetested, ties.method = "first")) %>%
+   # Determine total number of observations per group
+   mutate(total = n()) %>%
+   # For groups with 3 or more, take first, middle, last
+   # For groups with 2, take first and last
+   # For groups with 1, take only available
+   filter(
+     (total >= 3 & (rank == 1 | rank == ceiling(total/2) | rank == total)) |
+     (total == 2 & (rank == 1 | rank == 2)) |
+     (total == 1 & rank == 1)
+   ) %>%
+   # Assign V1, V2, V3 based on filtered ranks
+   mutate(rank = case_when(
+     rank == 1 ~ "V1",
+     rank == 2 & total == 2 ~ "V2",
+     total >= 3 & rank == ceiling(total/2) ~ "V2",
+     rank == total ~ "V3"
+   )) %>%
+   # Pivot wider with names from the new rank
+   pivot_wider(
+     names_from = rank, 
+     values_from = c(result, datetested, vlsup_cat), 
+     names_prefix = ""
+   ) %>%
+   # Remove the group by status after pivoting
+   ungroup() %>% 
+  # mutate(vlsup_cat_V3 = ifelse(is.null(vlsup_cat_V3), vlsup_cat_V3, vlsup_cat_V2))
+ 
+ 
+ # View the results to confirm
+ print(vl_df_clean_wide)
 
 ```
 
@@ -235,77 +238,39 @@ df1_filtered <- df1_filtered %>%
 df1_filtered <- df1_filtered %>%
   mutate(intervention = recode(intervention,
                                'intervention' = '1',
-                               'control' = '0'))
+                               'Control' = '0'))
 ```
 
 
 #descriptive statistics 
+
+
 ```{r}
-# and we're interested in only those with "Yes" in that column
+
+# Adjusting the subset to include only those with "Yes" in the intervention column
 intervention_subset <- df1_filtered[df1_filtered$intervention == "1", ]
-
-# create the counts for the pyramid.
-age_sex_counts <- intervention_subset %>%
-  group_by(age, sex) %>%
-  summarise(count = n()) %>%
-  ungroup()
-# Negate the counts for one of the sexes to create the pyramid effect in the plot
-age_sex_counts <- age_sex_counts %>%
-  mutate(count = ifelse(sex == "Female", -count, count)) # Assuming "Female" is one of the levels in the 'sex' column
-
-# create the age-sex pyramid plot
-ggplot(age_sex_counts, aes(x = age, y = count, fill = sex)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +  # Flip the axes to put age on the y-axis
-  scale_y_continuous(labels = abs) +  # Use absolute values for count labels
-  labs(x = "Count", y = "Age Group", fill = "Sex", title = "Age-Sex Pyramid for Intervention Group") +
-  theme_minimal()
-
-```
-
-```{r}
-
-intervention_subset <- intervention_subset %>%
-  count(age, sex)  # Replace 'age' and 'sex' with actual group column names
-
-# 'n' will be a valid column containing counts of occurrences
-
-```
-
-
-
-```{r}
-#restructuring the data 
-intervention_subset$Count <- ifelse(intervention_subset$sex == "Male", -intervention_subset$n, intervention_subset$n)
-
-# 'age' column is ordered correctly
-intervention_subset$age <- factor(intervention_subset$age, levels = unique(intervention_subset$age[order(intervention_subset$n)]))
-
 # Set the factor levels for the 'age' variable
 intervention_subset$age <- factor(intervention_subset$age, 
                                   levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years"))
-# Create the population pyramid plot with age levels in the specified order
-ggplot(intervention_subset, aes(x = age, y = Count, fill = sex)) +
-  geom_col() +
-  geom_text(aes(y = ifelse(Count > 0, Count/2, Count/2), label = abs(Count)),
-            position = position_stack(vjust = 0.5),
-            color = "white", 
-            fontface = "bold",
-            size = 2.5) +  # Adjust text size to fit within bars
-  scale_y_continuous(labels = abs) +
+
+# Create the age-sex pyramid plot directly from the intervention subset
+ggplot(data = intervention_subset, aes(x = age, fill = sex)) +
+  geom_bar(data = subset(intervention_subset, sex == "Male"), aes(y = ..count..), stat = "count") +
+  geom_bar(data = subset(intervention_subset, sex == "Female"), aes(y = -..count..), stat = "count") +
+  geom_text(data = subset(intervention_subset, sex == "Male"), aes(label = ..count.., y = ..count../2), stat = "count", size = 3) +
+  geom_text(data = subset(intervention_subset, sex == "Female"), aes(label = ..count.., y = -..count../2), stat = "count", size = 3) +
   scale_fill_manual(values = c("Female" = "#8980CB", "Male" = "#287C6F")) +
-  coord_flip() +
-  labs(x = NULL, y = "Count",
-       title = "Participant distribution by age and sex",
-       caption = "Source: PCM 2024 data",
-       fill = "Sex") +
+  coord_flip() +  # Flip the axes to put age groups on the y-axis
+  scale_y_continuous(labels = abs) +  # Use absolute values for count labels
+  labs(x = "Count", y = "Age Group", fill = "Sex", title = "Age-Sex Pyramid for Intervention Group",
+       caption = "Source: PCM 2024 data") +
   theme_minimal() +
   theme(
     plot.margin = unit(c(1, 1, 1, 1), "cm"),
     panel.spacing = unit(0.05, "lines"),
     panel.grid.major = element_blank(),  # Removes major grid lines
     panel.grid.minor = element_blank(),  # Removes minor grid lines
-    plot.title = element_text(size = 13, face = "bold", hjust = 0, vjust = 4),  # Left aligns the title
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5, vjust = 1),  # Center aligns the title
     strip.text = element_text(size = 11, vjust = 1),
     axis.text.x = element_text(size = 9),
     axis.text.y = element_text(size = 9),
@@ -314,6 +279,8 @@ ggplot(intervention_subset, aes(x = age, y = Count, fill = sex)) +
   )
 
 ```
+
+
  # DISTRIBUTION by caregiver
  
 ```{r}
@@ -345,11 +312,18 @@ ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = pare
 
 ```
 
+
+
+
 ```{r}
+
 long_data <- df1_filtered %>%
-  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V3) %>%
-  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
-  mutate(time = fct_relevel(time, "vlsup_cat_V1", "vlsup_cat_V3")) %>%
+  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3) %>%
+  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
+  mutate(
+    time = fct_recode(time, "Start" = "vlsup_cat_V1", "Midpoint" = "vlsup_cat_V2", "End" = "vlsup_cat_V3"),
+    intervention = factor(intervention, labels = c("Control", "Intervention"))
+  ) %>%
   filter(!is.na(viral_load))  # Exclude NA values
 
 # Summarize the data to get counts
@@ -360,19 +334,22 @@ count_data <- long_data %>%
 # Create the plot with specified facet layout
 ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
   geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +  # Set nrow to 2 for the desired layout
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +
   theme_minimal() +
-  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention", fill = "Intervention") +
-  scale_fill_brewer(palette = "Set1")
-# Note: 'interaction(intervention, row_number())' creates a unique group for each row within each intervention group,
-# which ensures that the lines connect the start and end points for the same individual.
-# try dumbell plot remove NA  
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_blank()
+  ) +
+  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention") +
+  scale_fill_manual(values = c("Control" = "#F8766D", "Intervention" = "#00BFC4"), labels = c("Control", "Intervention")) +
+  scale_x_discrete(labels = c("Start", "Midpoint", "End"))
+
+
 
 ```
 
-
 #creating final anaysis dataframe 
-
 ```{r}
 df_stat<- df_stat <- df1_filtered %>%
   select(
@@ -451,7 +428,6 @@ df_stat <- df_stat %>%
   ))
 
 #head(df_stat)
-
 
 ```
 

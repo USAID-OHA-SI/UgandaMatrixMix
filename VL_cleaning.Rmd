@@ -30,6 +30,7 @@ library(knitr)
 library(readr)
 library(openxlsx)
 library(stringr)
+library(janitor)
 ```
 
 ```{r}
@@ -41,14 +42,8 @@ library(stringr)
 # data_folder <- "Data"
 # data_folder %>% return_latest()
 file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
-vl_df <- read_excel(file_path, sheet = "VL for all CALHIV")
-```
-
-
-
-# rename the variables
-```{r}
-names(vl_df) <- c("facility", "client_id","merge_id", "result", "datetested")
+vl_df <- read_excel(file_path, sheet = "VL for all CALHIV",
+                    .name_repair = make_clean_names)
 ```
 
 Parse the date variable 

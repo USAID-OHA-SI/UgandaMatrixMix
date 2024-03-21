@@ -83,11 +83,10 @@ df <- df %>%
 
 symptoms 
 ```{r}
-df <- df %>%
-  mutate(factors_impacted_score_most_aggregated  = case_when(
-    factors_impacted_score_most %in% c("because of good care by my mother", "Behaviour of Pupils toward him", "Can not yet talk well", "cared by mother", "Family members are not stable in one position", "Fear of other people", "grandmother does not supervise the child", "he is a child", "he is a orphan", "He is a transfer out to lapinat", "he still too young, does not know", "I have no problems with our neighbors.", "It was those days when i was at school but no problems now", "Long distance", "love of my family members", "Minor", "Mother in law", "My cousin use to abuse, but he has gone to their home.", "My parent are the one who always pick my drugs no one knows my status.", "no body knows her status only the mother", "No discrimination", "No discrimination experienced", "no one  knows i am on ART", "No one knows my status", "No one knows my status apart from my parent", "no one knows my status only my mother", "none has insulted him.", "Not able to tell well", "Not sure", "Nothing like discrimination", "Peer group", "PEER GROUP", "School", "Self stigma", "She is a transfer out to TASO Gulu", "Stigma by fellow students", "The biological parent negleted child and the grandmother the taking care of.", "the information about the child is guarded by the parents", "The issue of discrimination are already been solve", "The mother reported no one knows ours status", "The mother reported that there is no problem", "The mother who always keep drug", "The respondant was the mother", "Usual situations", "We live freely with our neighbours", "friends","Full care","Classmates","Other- please specify" ) ~ "Other",
-    TRUE ~ as.character(factors_impacted_score_most)
-  ))
+df <- df %>% 
+  mutate(factors_impacted_score_most_aggregated = factors_impacted_score_most %>% 
+           fct_lump(n = 4) %>% 
+           as.character) 
 ```
 
 

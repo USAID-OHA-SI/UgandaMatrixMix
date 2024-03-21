@@ -139,7 +139,7 @@ output_folder <- "Dataout"
 output_file_path <- file.path(output_folder, "vldata.csv")
 
 # Write the vl_df1 DataFrame to the CSV file
-write.csv(vl_df1_filtered, output_file_path, row.names = FALSE)
+write_csv(vl_df1_filtered, output_file_path)
 
 ```
 

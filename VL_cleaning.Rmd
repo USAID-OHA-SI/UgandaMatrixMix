@@ -33,14 +33,14 @@ library(stringr)
 ```
 
 ```{r}
-setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+# setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
 ```
 
 # set filepath
 ```{r}
 # data_folder <- "Data"
 # data_folder %>% return_latest()
-file_path <- "../Data/PCM_Acholi 26 Feb.xlsx"
+file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
 vl_df <- read_excel(file_path, sheet = "VL for all CALHIV")
 ```
 

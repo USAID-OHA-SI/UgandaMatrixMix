@@ -48,7 +48,12 @@ vl_df <- read_excel(file_path, sheet = "VL for all CALHIV",
 
 Parse the date variable 
 ```{r}
-vl_df$datetested <- as.Date(sub("^\\d+\\s+", "", vl_df$datetested), format = "%Y-%m-%d")
+vl_df <- vl_df %>% 
+  mutate(datetested = as_date(datetested))
+
+#check no missing dates
+# vl_df %>% 
+#   filter(is.na(datetested))
 
 ```
 

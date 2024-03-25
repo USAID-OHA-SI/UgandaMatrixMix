@@ -135,7 +135,7 @@ df1_filtered <- df1 %>%
 Recoding the non intervention group 
 ```{r}
 df1_filtered <- df1_filtered %>% 
-  mutate(intervention = is.na(intervention), 0, 1)
+  mutate(intervention = ifelse(is.na(intervention), 0, 1))
 
 ```
 
@@ -157,27 +157,8 @@ df1_filtered <- df1_filtered %>%
 
 # recode variables to factors
 ```{r}
-factor_columns <- c(
-  "assessment_type", "age", "sex", "recommend_services", "q1_impact",
-  "healthy_symptom_free_frequency", "symptoms_impacted_q1", "experienced_symptoms_last_2_weeks",
-  "problem_experience_last_2_weeks", "support_from_family_friends", "hiv_discrimination_past_month",
-  "factors_impacted_score_most", "hiv_treatment_expenses_loan_sold", "specific_expenses_for_treatment",
-  "art_dispensed_last_contact", "preferred_art_dispensed", "unsuppressed_calhiv_dsd_approach",
-  "preferred_hiv_services_method", "preferred_dsd_choice", "attach_to_chw",
-  "parenthood_status", "factors_impacted_score_most_aggregated", "intervention", "vlsup_cat_V1", "vlsup_cat_V2","vlsup_cat_V3"
-)
-
 df1_filtered <- df1_filtered %>%
-  mutate(merge_id = as.character(merge_id))
-
-
-
-df1_filtered <- df1_filtered %>%
-  mutate(across(c(interview_date, datetested_V1, datetested_V2, datetested_V3),
-                ~ as.Date(sub("^\\d+\\s+", "", .), format = "%Y-%m-%d")))
-
-df1_filtered <- df1_filtered %>%
-  mutate_at(vars(all_of(factor_columns)), as.factor)
+  mutate(across(c(vlsup_cat_V1, vlsup_cat_V2,vlsup_cat_V3), as.factor))
 ```
 
 

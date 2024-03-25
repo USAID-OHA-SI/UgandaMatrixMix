@@ -168,10 +168,11 @@ df1_filtered <- df1_filtered %>%
 ```{r}
 
 # Adjusting the subset to include only those with "Yes" in the intervention column
-intervention_subset <- df1_filtered[df1_filtered$intervention == "1", ]
-# Set the factor levels for the 'age' variable
-intervention_subset$age <- factor(intervention_subset$age, 
-                                  levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years"))
+intervention_subset <- df1_filtered %>% 
+  filter(intervention == 1) %>% 
+  # Set the factor levels for the 'age' variable
+  mutate(age = factor(age, 
+                      levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years")))
 
 # Create the age-sex pyramid plot directly from the intervention subset
 ggplot(data = intervention_subset, aes(x = age, fill = sex)) +

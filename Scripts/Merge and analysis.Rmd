@@ -16,13 +16,12 @@ library(tidyverse)
 library(glamr)
 library(glitr)
 library(gophr)
-library(extrafont)
+library(systemfonts)
 library(scales)
 library(tidytext)
 library(glue)
 library(janitor)
 library(ggtext)
-library(extrafont)
 library(patchwork)
 library(knitr)
 library(readr)
@@ -61,114 +60,65 @@ dupl <- vl_dfclean[vl_dfclean %>%
     duplicated(), ] 
 ```
 
+Remove duplicates
 
 ```{r}
-vl_df_clean_wide<- vl_dfclean %>% 
-      group_by(merge_id) %>% 
-      filter(datetested == min(datetested) | datetested == max(datetested)) %>% 
-      mutate(type = ifelse(datetested == min(datetested), "start", "end")) %>% 
-      group_by(merge_id, type) %>% 
-      filter(row_number() == 1) %>% 
-      ungroup() %>% 
-      select(-result,-datetested) %>% 
-      pivot_wider(names_from = type,
-                  values_from = vlsup_cat)
-```
+#remove duplicates
+vl_dfclean <- vl_dfclean %>% 
+  group_by(merge_id, datetested) %>% 
+  filter(n() == 1) %>% 
+  ungroup()
 
-```{r}
-vl_df_clean_wide<-vl_dfclean %>% 
-     group_by(merge_id) %>% 
-     mutate(rank = rank(datetested, ties.method = "first")) %>% 
-     filter(rank == min(rank) | rank == ceiling(max(rank)/2) | rank == max(rank)) %>% 
-     arrange(merge_id, datetested) %>%
-     mutate(rank = rank(rank)) %>% 
-     pivot_wider(names_from=rank, values_from = rank, names_prefix = "V")
-```
+#how many observations are there for each unique merge id (there should be 3)
+vl_dfclean %>% 
+  count(merge_id, name = "stages") %>% 
+  count(stages) %>% 
+  mutate(share = n /sum(n))
 
-
-```{r}
-
- vl_df_clean_wide <- vl_dfclean %>%
-   group_by(merge_id) %>% 
-   # Rank by date tested
-   mutate(rank = rank(datetested, ties.method = "first")) %>%
-   # Determine total number of observations per group
-   mutate(total = n()) %>%
-   # For groups with 3 or more, take first, middle, last
-   # For groups with 2, take first and last
-   # For groups with 1, take only available
-   filter(
-     (total >= 3 & (rank == 1 | rank == ceiling(total/2) | rank == total)) |
-     (total == 2 & (rank == 1 | rank == 2)) |
-     (total == 1 & rank == 1)
-   ) %>%
-   # Assign V1, V2, V3 based on filtered ranks
-   mutate(rank = case_when(
-     rank == 1 ~ "V1",
-     rank == 2 & total == 2 ~ "V2",
-     total >= 3 & rank == ceiling(total/2) ~ "V2",
-     rank == total ~ "V3"
-   )) %>%
-   # Pivot wider with names from the new rank
-   pivot_wider(
-     names_from = rank, 
-     values_from = c(result, datetested, vlsup_cat), 
-     names_prefix = ""
-   ) %>%
-   # Remove the group by status after pivoting
-   ungroup() %>% 
-  # mutate(vlsup_cat_V3 = ifelse(is.null(vlsup_cat_V3), vlsup_cat_V3, vlsup_cat_V2))
- 
- 
- # View the results to confirm
- print(vl_df_clean_wide)
-
-```
-
-
-```{r}
-
-vl_df_clean_wide <- vl_dfclean %>%
+#remove where only 1 observation recorded
+vl_dfclean <- vl_dfclean %>% 
   group_by(merge_id) %>% 
-# Rank by date tested
- mutate(rank = rank(datetested, ties.method = "first")) %>%
-# Determine total number of observations per group
-mutate(total = n()) %>%
-# For groups with 3 or more, take first, middle, last
-# For groups with 2, take first and last
-# For groups with 1, take only available
-filter(
- (total >= 3 & (rank == 1 | rank == ceiling(total/2) | rank == total)) |
-  (total == 2 & (rank == 1 | rank == 2)) |
- (total == 1 & rank == 1)
-) %>%
-# Assign V1, V2, V3 based on filtered ranks
- mutate(rank = case_when(
- rank == 1 ~ "V1",
- rank == 2 & total == 2 ~ "V2",
- total >= 3 & rank == ceiling(total/2) ~ "V2",
- rank == total ~ "V3"
-)) %>%
-# Pivot wider with names from the new rank
-pivot_wider(
- names_from = rank, 
- values_from = c(result, datetested, vlsup_cat), 
- names_prefix = "" ) %>%
- # Remove the group by status after pivoting
-ungroup() %>% 
-mutate(result_V3_aux = ifelse(is.na(result_V3), result_V2, result_V3), .after="result_V3",
-       result_V2 = ifelse(is.na(result_V3), NA, result_V2),
-       result_V3 = result_V3_aux) %>% 
-mutate(vlsup_cat_V3_aux = ifelse(is.na(vlsup_cat_V3), vlsup_cat_V2, vlsup_cat_V3),
-       vlsup_cat_V2 = ifelse(is.na(vlsup_cat_V3), NA, vlsup_cat_V2),
-       vlsup_cat_V3 = vlsup_cat_V3_aux) %>% 
-select(-result_V3_aux, -vlsup_cat_V3_aux)
-  
-# created Aux variable to help check if the movement from V2 to v3 for observations with only 2 vls have moved correctly then deleted the aux variable 
-
+  filter(n() > 1) %>% 
+  ungroup()
 
 ```
 
+Limit each patient to only 3 observations (max) and identify each stage
+
+```{r}
+vl_dfclean %>% 
+  count(merge_id) %>% 
+  count(n)
+
+### could think about introducing some logic to ensure visits are 6 months from the last to possibly deal with some of the extra observations
+
+#arrange each merge id by date and take the 1st, 2nd, and last (renaming it 3rd for uniformity purposes and drop anything else in between)
+vl_dfclean_lim <- vl_dfclean %>% 
+  group_by(merge_id) %>% 
+  arrange(merge_id, datetested) %>% 
+  mutate(stage = row_number(),
+         group = case_when(n() == 2 ~"only 2 observations",
+                           n() == 3 ~ "3 observations",
+                           TRUE ~ "3+ observations")
+         ) %>% 
+  filter(stage <= 2 | stage == max(stage)) %>% #this takes the last obs but could take the 3rd as final instead
+  ungroup() %>%
+  mutate(stage = ifelse(stage > 2, 3, stage)) 
+```
+
+Reshape wide to have one row per patient
+
+```{r}
+vl_df_clean_wide <- vl_dfclean_lim %>% 
+  pivot_wider(names_from = stage,
+              names_prefix = "V",
+              values_from = c(result, datetested, vlsup_cat)) %>% 
+  mutate(missing_V3 = is.na(result_V3),
+         result_V3 = ifelse(is.na(result_V3), result_V2, result_V3),
+         datetested_V3 = case_when(is.na(datetested_V3) ~ datetested_V2, TRUE ~ datetested_V3),
+         vlsup_cat_V3 = ifelse(is.na(vlsup_cat_V3), vlsup_cat_V2, vlsup_cat_V3),
+         )
+```
 
 ## Perform a full join on ml_dfclean and vl_dfclean  using a common key'merge_id'
 ```{r}

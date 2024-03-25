@@ -175,29 +175,21 @@ intervention_subset <- df1_filtered %>%
                       levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years")))
 
 # Create the age-sex pyramid plot directly from the intervention subset
-ggplot(data = intervention_subset, aes(x = age, fill = sex)) +
-  geom_bar(data = subset(intervention_subset, sex == "Male"), aes(y = ..count..), stat = "count") +
-  geom_bar(data = subset(intervention_subset, sex == "Female"), aes(y = -..count..), stat = "count") +
-  geom_text(data = subset(intervention_subset, sex == "Male"), aes(label = ..count.., y = ..count../2), stat = "count", size = 3) +
-  geom_text(data = subset(intervention_subset, sex == "Female"), aes(label = ..count.., y = -..count../2), stat = "count", size = 3) +
-  scale_fill_manual(values = c("Female" = "#8980CB", "Male" = "#287C6F")) +
-  coord_flip() +  # Flip the axes to put age groups on the y-axis
-  scale_y_continuous(labels = abs) +  # Use absolute values for count labels
-  labs(x = "Count", y = "Age Group", fill = "Sex", title = "Age-Sex Pyramid for Intervention Group",
+intervention_subset %>% 
+  count(age, sex) %>% 
+  mutate(count = ifelse(sex == "Female", -n, n),
+         fill_color = ifelse(sex == "Female", moody_blue, genoa)) %>% 
+  ggplot(aes(count, age, fill = fill_color)) +
+  geom_blank(aes(x = -count)) + # center pyramind
+  geom_col() +
+  geom_text(aes(x = .75 * count, label = n)) + 
+  scale_fill_identity() +
+  labs(x = NULL, y = NULL, title = "Age-Sex Composition of the Intervention Group",
+       subtitle = glue("<span style='color:{moody_blue}'>Female</span> v <span style='color:{genoa}'>Male</span>"),
        caption = "Source: PCM 2024 data") +
-  theme_minimal() +
-  theme(
-    plot.margin = unit(c(1, 1, 1, 1), "cm"),
-    panel.spacing = unit(0.05, "lines"),
-    panel.grid.major = element_blank(),  # Removes major grid lines
-    panel.grid.minor = element_blank(),  # Removes minor grid lines
-    plot.title = element_text(size = 13, face = "bold", hjust = 0.5, vjust = 1),  # Center aligns the title
-    strip.text = element_text(size = 11, vjust = 1),
-    axis.text.x = element_text(size = 9),
-    axis.text.y = element_text(size = 9),
-    plot.caption = element_text(size = 9, color = "grey50", hjust = 1, margin = margin(t = 15)),
-    legend.position = "none"
-  )
+  si_style_nolines() +
+  theme(axis.text.x = element_blank(),
+        plot.subtitle = element_markdown())
 
 ```
 

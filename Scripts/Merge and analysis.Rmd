@@ -134,7 +134,8 @@ df1_filtered <- df1 %>%
 
 Recoding the non intervention group 
 ```{r}
-df1_filtered$intervention <- ifelse(is.na(df1_filtered$intervention), "Control", df1_filtered$intervention)
+df1_filtered <- df1_filtered %>% 
+  mutate(intervention = is.na(intervention), 0, 1)
 
 ```
 
@@ -177,14 +178,6 @@ df1_filtered <- df1_filtered %>%
 
 df1_filtered <- df1_filtered %>%
   mutate_at(vars(all_of(factor_columns)), as.factor)
-```
-
-```{r}
-
-df1_filtered <- df1_filtered %>%
-  mutate(intervention = recode(intervention,
-                               'intervention' = '1',
-                               'Control' = '0'))
 ```
 
 

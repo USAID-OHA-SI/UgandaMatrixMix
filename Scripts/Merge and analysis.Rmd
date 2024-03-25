@@ -1,0 +1,360 @@
+---
+title: "Merge, descripive and statistical analysis"
+author: "Nelly"
+date: "2024-03-15"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(systemfonts)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(patchwork)
+library(knitr)
+library(readr)
+library(openxlsx)
+library(stringr)
+```
+
+# set filepath
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+ml_path <- "Dataout/masterclientlist.rds"
+ml_dfclean <- read_rds(ml_path)
+```
+
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+vl_path <- "Dataout/vldata.rds"
+vl_dfclean <- read_rds(vl_path)
+```
+
+
+
+```{r}
+vl_dfclean %>% 
+    group_by(merge_id) %>% 
+    filter(n() > 1)
+```
+
+
+
+```{r}
+dupl <- vl_dfclean[vl_dfclean %>% 
+    select(merge_id, datetested) %>% 
+    duplicated(), ] 
+```
+
+Remove duplicates
+
+```{r}
+#remove duplicates
+vl_dfclean <- vl_dfclean %>% 
+  group_by(merge_id, datetested) %>% 
+  filter(n() == 1) %>% 
+  ungroup()
+
+#how many observations are there for each unique merge id (there should be 3)
+vl_dfclean %>% 
+  count(merge_id, name = "stages") %>% 
+  count(stages) %>% 
+  mutate(share = n /sum(n))
+
+#remove where only 1 observation recorded
+vl_dfclean <- vl_dfclean %>% 
+  group_by(merge_id) %>% 
+  filter(n() > 1) %>% 
+  ungroup()
+
+```
+
+Limit each patient to only 3 observations (max) and identify each stage
+
+```{r}
+vl_dfclean %>% 
+  count(merge_id) %>% 
+  count(n)
+
+### could think about introducing some logic to ensure visits are 6 months from the last to possibly deal with some of the extra observations
+
+#arrange each merge id by date and take the 1st, 2nd, and last (renaming it 3rd for uniformity purposes and drop anything else in between)
+vl_dfclean_lim <- vl_dfclean %>% 
+  group_by(merge_id) %>% 
+  arrange(merge_id, datetested) %>% 
+  mutate(stage = row_number(),
+         group = case_when(n() == 2 ~"only 2 observations",
+                           n() == 3 ~ "3 observations",
+                           TRUE ~ "3+ observations")
+         ) %>% 
+  filter(stage <= 2 | stage == max(stage)) %>% #this takes the last obs but could take the 3rd as final instead
+  ungroup() %>%
+  mutate(stage = ifelse(stage > 2, 3, stage)) 
+```
+
+Reshape wide to have one row per patient
+
+```{r}
+vl_df_clean_wide <- vl_dfclean_lim %>% 
+  pivot_wider(names_from = stage,
+              names_prefix = "V",
+              values_from = c(result, datetested, vlsup_cat)) %>% 
+  mutate(missing_V3 = is.na(result_V3),
+         result_V3 = ifelse(is.na(result_V3), result_V2, result_V3),
+         datetested_V3 = case_when(is.na(datetested_V3) ~ datetested_V2, TRUE ~ datetested_V3),
+         vlsup_cat_V3 = ifelse(is.na(vlsup_cat_V3), vlsup_cat_V2, vlsup_cat_V3),
+         )
+```
+
+## Perform a full join on ml_dfclean and vl_dfclean  using a common key'merge_id'
+```{r}
+
+df1 <- tidylog::full_join(ml_dfclean, vl_df_clean_wide, by = "merge_id")
+
+```
+# remove 343 clients observations without VL data 
+```{r}
+df1_filtered <- df1 %>%
+  dplyr::filter(!is.na(vlsup_cat_V1) | !is.na(vlsup_cat_V3))
+```
+
+Recoding the non intervention group 
+```{r}
+df1_filtered <- df1_filtered %>% 
+  mutate(intervention = ifelse(is.na(intervention), 0, 1))
+
+```
+
+
+
+```{r}
+# Recode specified levels into a single category "Relatives"
+df1_filtered <- df1_filtered %>%
+  mutate(parenthood_status_combined = case_when(
+    parenthood_status %in% c("Work place", "wife", "Husband", 
+                             "Grand Parents", "Child headed", 
+                             "Caregiver mentor", "OVC") ~ "Relatives",
+    TRUE ~ as.character(parenthood_status)
+  ))
+```
+
+
+
+
+# recode variables to factors
+```{r}
+df1_filtered <- df1_filtered %>%
+  mutate(across(c(vlsup_cat_V1, vlsup_cat_V2,vlsup_cat_V3), as.factor))
+```
+
+
+#descriptive statistics 
+
+
+```{r}
+
+# Adjusting the subset to include only those with "Yes" in the intervention column
+intervention_subset <- df1_filtered %>% 
+  filter(intervention == 1) %>% 
+  # Set the factor levels for the 'age' variable
+  mutate(age = factor(age, 
+                      levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years")))
+
+# Create the age-sex pyramid plot directly from the intervention subset
+intervention_subset %>% 
+  count(age, sex) %>% 
+  mutate(count = ifelse(sex == "Female", -n, n),
+         fill_color = ifelse(sex == "Female", moody_blue, genoa)) %>% 
+  ggplot(aes(count, age, fill = fill_color)) +
+  geom_blank(aes(x = -count)) + # center pyramind
+  geom_col() +
+  geom_text(aes(x = .75 * count, label = n)) + 
+  scale_fill_identity() +
+  labs(x = NULL, y = NULL, title = "Age-Sex Composition of the Intervention Group",
+       subtitle = glue("<span style='color:{moody_blue}'>Female</span> v <span style='color:{genoa}'>Male</span>"),
+       caption = "Source: PCM 2024 data") +
+  si_style_nolines() +
+  theme(axis.text.x = element_blank(),
+        plot.subtitle = element_markdown())
+
+```
+
+
+ # DISTRIBUTION by caregiver
+ 
+```{r}
+# Convert the combined parenthood status to a factor
+df1_filtered$parenthood_status_combined <- factor(df1_filtered$parenthood_status_combined)
+
+
+#create bar plot
+# count the number of each parenthood status
+parenthood_counts <- df1_filtered %>%
+filter(intervention == "1") %>%
+count(parenthood_status_combined) %>%
+mutate(parenthood_status_combined = fct_infreq(parenthood_status_combined)) %>%
+mutate(percentage = n / sum(n) * 100) # Calculate percentages
+
+# Plot
+ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = parenthood_status_combined, label = scales::percent(percentage / 100))) +
+ geom_bar(stat = "identity") +
+  geom_text(vjust = -0.5, size = 3.5) + # Add percentage labels
+  scale_fill_manual(values = c("#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4", "#fed9a6")) +
+  theme_minimal() +
+ labs(x = "Parenthood Status", y = "", title = "Parenthood Status for Intervention Participants") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
+      legend.position = "none", # Hide legend
+     panel.grid.major = element_blank(), # Remove major grid lines
+     panel.grid.minor = element_blank(), # Remove minor grid lines
+      plot.caption = element_text(hjust = 1)) + # Align caption to the right
+ labs(caption = "Source: PCM 2024 data") # Add source caption
+
+```
+
+
+
+
+```{r}
+
+long_data <- df1_filtered %>%
+  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3) %>%
+  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
+  mutate(
+    time = fct_recode(time, "Start" = "vlsup_cat_V1", "Midpoint" = "vlsup_cat_V2", "End" = "vlsup_cat_V3"),
+    intervention = factor(intervention, labels = c("Control", "Intervention"))
+  ) %>%
+  filter(!is.na(viral_load))  # Exclude NA values
+
+# Summarize the data to get counts
+count_data <- long_data %>%
+  group_by(time, intervention, viral_load) %>%
+  summarise(count = n(), .groups = 'drop')
+
+# Create the plot with specified facet layout
+ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_blank()
+  ) +
+  labs(x = "Time", y = "Count", title = "Counts by Time Point and Intervention") +
+  scale_fill_manual(values = c("Control" = "#F8766D", "Intervention" = "#00BFC4"), labels = c("Control", "Intervention")) +
+  scale_x_discrete(labels = c("Start", "Midpoint", "End"))
+
+
+
+```
+
+#creating final anaysis dataframe 
+```{r}
+df_stat<- df_stat <- df1_filtered %>%
+  select(
+    merge_id,
+    age,
+    sex,
+    recommend_services,
+    healthy_symptom_free_frequency,
+    problem_experience_last_2_weeks,
+    support_from_family_friends,
+    hiv_discrimination_past_month,
+    factors_impacted_score_most,
+    hiv_treatment_expenses_loan_sold,
+    preferred_hiv_services_method,
+    attach_to_chw,
+    parenthood_status_combined,
+    intervention,
+    vlsup_cat_V1,
+    vlsup_cat_V2,
+    vlsup_cat_V3,
+  )
+```
+
+
+#Categorize CALHIV Participants into VLS Groups:
+```{r}
+# df_stat_intervention <- df_stat %>%
+#   filter(intervention == "intervention")
+# 
+# # Categorizing participants based on viral load states, only for those with intervention
+# df_stat_intervention$VLS_group <- case_when(
+#   df_stat_intervention$vlsup_cat_V1 == "suppressed" & df_stat_intervention$vlsup_cat_V3 == "suppressed" ~ "Suppressed",
+#   df_stat_intervention$vlsup_cat_V1 != df_stat_intervention$vlsup_cat_V3 & !is.na(df_stat_intervention$vlsup_cat_V1) & !is.na(df_stat_intervention$vlsup_cat_V3) ~ "Cycling",
+#   is.na(df_stat_intervention$vlsup_cat_V1) | is.na(df_stat_intervention$vlsup_cat_V3) ~ "Data Missing", # Handle NAs if any
+#   TRUE ~ "Never suppressed" # The rest are considered never suppressed
+# )
+
+```
+
+
+
+```{r}
+# categorize 3 viral load categories.
+
+df_stat <- df_stat %>%
+  mutate(VLS_group3_draws = case_when(
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "Never suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",  
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "suppressed" ~ "cycling",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "cycling",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "undetectable" ~ "suppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "undetectable" & vlsup_cat_V3 == "unsuppressed" ~ "unsuppressed",
+    vlsup_cat_V1 == "undetectable" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "undetectable" ~ "cycling",
+    TRUE ~ NA_character_  # This line handles cases that don't match any condition
+  ))
+
+#head(df_stat)
+
+```
+
+
+```{r}
+
+# Set the path to the folder where you want to save the CSV
+output_folder <- "C:/Users/nmaina/Documents/R.Projects/UgandaMatrixMix/Dataout"
+
+# Define the full path to the CSV file within the output folder
+output_file_path <- file.path(output_folder, "Analysis_data.csv")
+
+# Write the vl_df1 DataFrame to the CSV file
+write.csv(df1_filtered, output_file_path, row.names = FALSE)
+
+```
+

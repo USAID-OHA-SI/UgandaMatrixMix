@@ -1,0 +1,144 @@
+---
+title: "Vl_cleaning"
+author: "Nelly"
+date: "2024-03-14"
+output: html_document
+---
+
+title: "PCM_ uganda_2024"
+output: html_notebook
+---
+
+Load packages 
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(extrafont)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(extrafont)
+library(patchwork)
+library(knitr)
+library(readr)
+library(openxlsx)
+library(stringr)
+```
+
+```{r}
+# setwd("C:/Users/nmaina/Documents/R.Projects/PCM_ uganda_2024")
+```
+
+# set filepath
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+file_path <- "Data/PCM _Acholi 26 Feb.xlsx"
+vl_df <- read_excel(file_path, sheet = "VL for all CALHIV",
+                    .name_repair = make_clean_names) %>% 
+  rename(result = results,
+         merge_id = merged_id)
+```
+
+Parse the date variable 
+```{r}
+vl_df <- vl_df %>% 
+  mutate(datetested = as_date(datetested))
+
+#check no missing dates
+vl_df %>%
+  filter(is.na(datetested)) %>% 
+  nrow() == 0
+
+```
+
+
+# cleaning the results variable 
+# Remove 73 observations with "Failed" or "FAILED" responses (case-insensitive) or missing results in the Results variable
+```{r}
+vl_df1 <- vl_df %>%
+  filter(tolower(result) != "failed", !is.na(result))
+```
+# remove the facility variable 
+```{r}
+vl_df1<- vl_df1 %>%
+  select(-facility, -client_id)
+```
+
+6324 duplicates 
+```{r}
+# Identify all duplicate rows based on all columns
+duplicates_all_columns <- vl_df1[duplicated(vl_df1), ] # we have 6324 duplicates 
+```
+
+#deletes all the duplicates 
+```{r}
+# Remove duplicate rows based on all columns, keeping the first occurrence
+vl_df1 <- distinct(vl_df1)
+```
+
+
+This code dose the following 
+<!-- Convert "Target Not Detected" in the result column to "< 20 Copies / mL". -->
+<!-- Classify the vlsup_cat categories as "unsuppressed", "suppressed", or "undetectable". -->
+<!-- Remove any rows where result is exactly "0". -->
+
+```{r}
+vl_df1 <- vl_df1 %>%
+  # Replace "Target Not Detected" with "< 20 Copies / mL"
+  # Extract numeric part from result, replace commas to handle thousands
+  mutate(vl_copies = ifelse(result == "Target Not Detected",
+                            20, # Replace "Target Not Detected" with "< 20 Copies / mL"
+                            result %>% 
+                              str_extract("[0-9,]+") %>% 
+                              str_remove_all(",") %>% 
+                              as.numeric()))  %>%
+  # Remove rows where result is exactly "0" or "0 Copies / mL"
+  filter(result != "0", result != "0 Copies / mL") %>%
+  # Classify viral load based on the extracted numbers
+  mutate(vlsup_cat = case_when(
+    vl_copies <= 200  ~ "undetectable", 
+    vl_copies <= 1000 ~ "suppressed",
+    vl_copies  > 1000 ~ "unsuppressed",
+    TRUE ~ "unknown"
+  )) %>%
+  # Remove the temporary 'vl_copies' column
+  select(-vl_copies)
+```
+
+
+4890 unique merge_id in this vl_df1 
+```{r}
+  n_distinct(vl_df1$merge_id)
+```
+# delete any merge id observation that occurs once 
+
+```{r}
+vl_df1_filtered <- vl_df1 %>% 
+  group_by(merge_id) %>% 
+  filter(n() != 1) %>% 
+  ungroup()
+```
+
+# Write the vl_df1 DataFrame to the CSV file
+
+
+```{r}
+# Set the path to the folder where you want to save the CSV
+output_folder <- "Dataout"
+
+# Define the full path to the CSV file within the output folder
+output_file_path <- file.path(output_folder, "vldata.rds")
+
+# Write the vl_df1 DataFrame to the CSV file
+write_rds(vl_df1_filtered, output_file_path)
+
+```
+

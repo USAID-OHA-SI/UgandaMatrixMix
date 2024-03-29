@@ -344,6 +344,85 @@ df_stat <- df_stat %>%
 
 ```
 
+```{r}
+df_test <- df1_filtered %>%
+  select(merge_id, intervention, group, missing_V3, starts_with("result"), starts_with("vlsup_cat")) %>%
+  rename_with(~str_replace(., "_V", "\\.v"), 
+              .cols = c(starts_with("result"), starts_with("vlsup_cat"))) %>% 
+  pivot_longer(matches("\\.v"),
+               names_to = c(".value", "time"),
+               names_sep = "\\.v")
+
+df_test <- df_test %>% 
+  mutate(vl_copies = ifelse(result == "Target Not Detected",
+                            20, # Replace "Target Not Detected" with "< 20 Copies / mL"
+                            result %>% 
+                              str_extract("[0-9,]+") %>% 
+                              str_remove_all(",") %>% 
+                              as.numeric()),
+         time = case_match(time, 
+                           "1" ~ "Start",
+                           "2" ~ "Midpoint",
+                           "3" ~ "End"
+                           ),
+         time = factor(time, c("Start", "Midpoint", "End")))
+
+df_test_viz <- df_test %>% 
+  mutate(intervention = case_match(intervention, 
+                           0 ~ "Control Group",
+                           1 ~ "Intervention Group",
+                           )) %>% 
+  group_by(intervention) %>% 
+  mutate(intervention_count = glue("{intervention}\n(n = {n_distinct(merge_id) %>% comma})")) %>% 
+  ungroup()
+
+df_test_viz %>% 
+  ggplot(aes(time, vl_copies)) +
+  geom_hline(aes(yintercept = 200), color = "#505050", linetype = "dashed") +
+  geom_hline(aes(yintercept = 1000), color = "#505050", linetype = "dashed") +
+  geom_point(position = position_jitter(width = .1, seed = 42), 
+             alpha = .1, color = hw_slate) +
+  stat_summary(fun = "median", geom = "line", color = hw_orchid_bloom,
+               aes(group = intervention)) +
+  stat_summary(fun = "median", geom = "point", color = hw_orchid_bloom,
+               size = 4) +
+  stat_smooth(method = "loess", fill = grey10k, alpha = 0.25) +
+  facet_wrap(~fct_rev(intervention_count)) +
+  scale_y_continuous(limits = c(0, 10e3),
+                     oob = oob_squish,
+                     labels = comma) +
+  labs(x = NULL,
+       y = NULL,
+        title = "Was the intervention able to increase the share of supressed clients?" %>% toupper,
+       subtitle = "Median copies/ml noted in pink compared with jitter patient values at each point",
+       caption = "Note: Data capped at 10k copies/ml
+       Source: PCM 2024 data") +
+  si_style_ygrid()
+
+
+df_test_viz %>% 
+  count(intervention_count, time, vlsup_cat) %>% 
+  group_by(intervention_count, time) %>% 
+  mutate(share = n/ sum(n)) %>% 
+  ungroup() %>% 
+  mutate(vlsup_cat = factor(vlsup_cat, c("unsuppressed", "suppressed",  "undetectable"))) %>%
+  ggplot(aes(share, "y", fill = vlsup_cat)) +
+  geom_col() +
+  geom_text(aes(label = percent(share, 1)), color = "white") +
+  facet_grid(time ~ intervention_count, scales = "free_y", switch = "y") +
+  scale_x_continuous(label = percent_format()) + 
+  scale_fill_manual(values = c("unsuppressed" = hw_orchid_bloom,
+                               "suppressed" = hw_electric_indigo,
+                               "undetectable" = hw_viking
+                               )) +
+  labs(x = NULL, y = NULL, fill = NULL,
+       title = "Was the intervention able to increase the share of supressed clients?" %>% toupper,
+       caption = "Source: PCM 2024 data") +
+  si_style_nolines() + 
+  theme(axis.text.y = element_blank())
+  
+```
+
 
 ```{r}
 

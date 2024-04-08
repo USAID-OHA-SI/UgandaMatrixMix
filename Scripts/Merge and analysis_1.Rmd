@@ -1,0 +1,734 @@
+---
+title: "Merge, descripive and statistical analysis"
+author: "Nelly"
+date: "2024-03-15"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(readxl)
+library(grabr)
+library(gagglr)
+library(tidyverse)
+library(glamr)
+library(glitr)
+library(gophr)
+library(systemfonts)
+library(scales)
+library(tidytext)
+library(glue)
+library(janitor)
+library(ggtext)
+library(patchwork)
+library(knitr)
+library(readr)
+library(openxlsx)
+library(stringr)
+```
+
+# set filepath
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+ml_path <- "../Dataout/masterclientlist.rds"
+ml_dfclean <- read_rds(ml_path)
+```
+
+```{r}
+# data_folder <- "Data"
+# data_folder %>% return_latest()
+vl_path <- "../Dataout/vldata.rds"
+vl_dfclean <- read_rds(vl_path)
+```
+
+
+
+```{r}
+vl_dfclean %>% 
+    group_by(merge_id) %>% 
+    filter(n() > 1)
+```
+
+
+
+```{r}
+dupl <- vl_dfclean[vl_dfclean %>% 
+    select(merge_id, datetested) %>% 
+    duplicated(), ] 
+```
+
+Remove duplicates
+
+```{r}
+#remove duplicates
+vl_dfclean <- vl_dfclean %>% 
+  group_by(merge_id, datetested) %>% 
+  filter(n() == 1) %>% 
+  ungroup()
+
+#how many observations are there for each unique merge id (there should be 3)
+vl_dfclean %>% 
+  count(merge_id, name = "stages") %>% 
+  count(stages) %>% 
+  mutate(share = n /sum(n))
+
+#remove where only 1 observation recorded
+vl_dfclean <- vl_dfclean %>% 
+  group_by(merge_id) %>% 
+  filter(n() > 1) %>% 
+  ungroup()
+# check the CALHIV with more viral loads 
+```
+
+@ Qc to see if the outliers were data issues 
+```{r}
+# Count the number of observations for each merge_id
+observations <- vl_dfclean %>% 
+  count(merge_id, name = "stages")
+
+# Filter to find merge_ids that occur exactly 7 or 8 times
+observations_seven_eight <- observations %>% 
+  filter(stages == 7 | stages == 8)
+#
+```
+
+
+
+Limit each patient to only 3 observations (max) and identify each stage
+
+```{r}
+vl_dfclean %>% 
+  count(merge_id) %>% 
+  count(n)
+
+### could think about introducing some logic to ensure visits are 6 months from the last to possibly deal with some of the extra observations
+
+#arrange each merge id by date and take the 1st, 2nd, and last (renaming it 3rd for uniformity purposes and drop anything else in between)
+vl_dfclean_lim <- vl_dfclean %>% 
+  group_by(merge_id) %>% 
+  arrange(merge_id, datetested) %>% 
+  mutate(stage = row_number(),
+         group = case_when(n() == 2 ~"only 2 observations",
+                           n() == 3 ~ "3 observations",
+                           TRUE ~ "3+ observations")
+         ) %>% 
+  filter(stage <= 2 | stage == max(stage)) %>% #this takes the last obs but could take the 3rd as final instead
+  ungroup() %>%
+  mutate(stage = ifelse(stage > 2, 3, stage)) 
+```
+
+Reshape wide to have one row per patient
+
+```{r}
+vl_df_clean_wide <- vl_dfclean_lim %>% 
+  pivot_wider(names_from = stage,
+              names_prefix = "V",
+              values_from = c(result, datetested, vlsup_cat)) %>% 
+  mutate(missing_V3 = is.na(result_V3),
+         result_V3 = ifelse(is.na(result_V3), result_V2, result_V3),
+         datetested_V3 = case_when(is.na(datetested_V3) ~ datetested_V2, TRUE ~ datetested_V3),
+         vlsup_cat_V3 = ifelse(is.na(vlsup_cat_V3), vlsup_cat_V2, vlsup_cat_V3),
+         )
+```
+
+
+
+
+## Perform a full join on ml_dfclean and vl_dfclean  using a common key'merge_id'
+```{r}
+
+#df1 <- tidylog::full_join(ml_dfclean, vl_df_clean_wide, by = "merge_id")
+
+```
+# remove 343 clients observations without VL data 
+```{r}
+# df1_filtered <- df1 %>%
+#   dplyr::filter(!is.na(vlsup_cat_V1) | !is.na(vlsup_cat_V3))
+```
+
+Recoding the non intervention group 
+```{r}
+# df1_filtered <- df1_filtered %>% 
+#   mutate(intervention = ifelse(is.na(intervention), 0, 1))
+
+```
+
+
+
+```{r}
+# Recode specified levels into a single category "Relatives"
+ml_dfclean <- ml_dfclean %>%
+  mutate(parenthood_status_combined = case_when(
+    parenthood_status %in% c("Work place", "wife", "Husband", 
+                             "Grand Parents", "Child headed", 
+                             "Caregiver mentor", "OVC") ~ "Relatives",
+    TRUE ~ as.character(parenthood_status)
+  ))
+```
+
+
+
+# recode VL variables to factors
+```{r}
+vl_df_clean_wide <- vl_df_clean_wide %>%
+  mutate(across(c(vlsup_cat_V1, vlsup_cat_V2,vlsup_cat_V3), as.factor))
+```
+
+
+# adding intervention variable to the Vl df
+
+```{r}
+
+vl_df_cleanfinal <- vl_df_clean_wide %>%
+  left_join(ml_dfclean %>% 
+              distinct(merge_id, .keep_all = TRUE) %>%
+              select(merge_id, intervention), 
+            by = "merge_id") %>%
+  mutate(intervention = replace_na(intervention, "No"),
+         intervention = case_when(intervention == "Yes" ~ 1, 
+                                  TRUE ~ 0))
+
+```
+
+
+
+
+
+#descriptive statistics  
+```{r}
+
+# Adjusting the subset to include only those with "Yes" in the intervention column but also one observation per merge_1d
+intervention_subset <- ml_dfclean %>% 
+  distinct(merge_id, .keep_all = TRUE) %>% 
+  #filter(intervention == 1,) %>% 
+  # Set the factor levels for the 'age' variable
+  mutate(age = factor(age, 
+                      levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years")))
+
+moody_blue <- "#8980CB"  # New color code for moody blue
+genoa <- "#287C6F"      # New color code for genoa
+
+# Create the age-sex pyramid plot directly from the intervention subset
+intervention_subset %>% 
+  count(age, sex) %>% 
+  mutate(count = ifelse(sex == "Female", -n, n),
+         fill_color = ifelse(sex == "Female", moody_blue, genoa)) %>% 
+  ggplot(aes(count, age, fill = fill_color)) +
+  geom_blank(aes(x = -count)) + # center pyramind
+  geom_col() +
+  geom_text(aes(x = .75 * count, label = n)) + 
+  scale_fill_identity() +
+  labs(x = NULL, y = NULL, title = "Age-Sex Composition of the Intervention Group",
+       subtitle = glue("<span style='color:{moody_blue}'>Female</span> v <span style='color:{genoa}'>Male</span> (N=640)"),
+       caption = "Source: PCM 2024 data") +
+  si_style_nolines() +
+  theme(axis.text.x = element_blank(),
+        plot.subtitle = element_markdown())
+
+```
+
+
+ # DISTRIBUTION by caregiver
+ 
+```{r}
+# Convert the combined parenthood status to a factor
+ml_dfclean$parenthood_status_combined <- factor(ml_dfclean$parenthood_status_combined)
+
+
+#create bar plot
+# count the number of each parenthood status
+parenthood_counts <- ml_dfclean %>%
+#filter(intervention == "1") %>%
+  distinct(merge_id, .keep_all = TRUE) %>% 
+count(parenthood_status_combined) %>%
+mutate(parenthood_status_combined = fct_infreq(parenthood_status_combined)) %>%
+mutate(percentage = n / sum(n) * 100) # Calculate percentages
+
+# Plot
+ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = parenthood_status_combined, label = scales::percent(percentage / 100))) +
+ geom_bar(stat = "identity") +
+  geom_text(vjust = -0.5, size = 3.5) + # Add percentage labels
+  scale_fill_manual(values = c("#ff939a", "#dfd3ff")) +
+  theme_minimal() +
+ labs(x = "Parenthood Status", y = "", title = "Parenthood Status for Intervention Participants", subtitle = "67% of the participants had biological parents as caregivers") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
+      legend.position = "none", # Hide legend
+     panel.grid.major = element_blank(), # Remove major grid lines
+     panel.grid.minor = element_blank(), # Remove minor grid lines
+      plot.caption = element_text(hjust = 1)) + # Align caption to the right
+ labs(caption = "Source: PCM 2024 data") # Add source caption
+
+```
+#categorizing vl data
+```{r}
+vl_df_cleanfinal <- vl_df_cleanfinal %>%
+  # Convert factor levels to characters if they aren't already
+  mutate(across(starts_with("vlsup_cat_V"), as.character)) %>%
+  # Apply conditions based on 'group' and 'vlsup_cat' values
+  mutate(vl_status = case_when(
+    # If all instances are suppressed, then overall is suppressed
+    group %in% c("3+ observations", "3 observations") & 
+      vlsup_cat_V1 == "suppressed" & 
+      vlsup_cat_V2 == "suppressed" & 
+      vlsup_cat_V3 == "suppressed" ~ "suppressed",
+    
+    # If there is a mix of suppressed and unsuppressed, then overall is cycling
+    group %in% c("3+ observations", "3 observations") & 
+      (vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed") &
+      (vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "suppressed" & vlsup_cat_V3 == "unsuppressed") &
+       (vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed" & vlsup_cat_V3 == "unsuppressed") ~ "cycling",
+       
+    
+    # If all instances are unsuppressed, then overall is Never suppressed
+    group %in% c("3+ observations", "3 observations") & 
+      vlsup_cat_V1 == "unsuppressed" & 
+      vlsup_cat_V2 == "unsuppressed" & 
+      vlsup_cat_V3 == "unsuppressed" ~ "Never suppressed",
+    
+    # For the group "only 2 observations", apply similar logic for two visits
+    group == "only 2 observations" & 
+      vlsup_cat_V1 == "suppressed" & 
+      vlsup_cat_V2 == "suppressed" ~ "suppressed",
+    
+    group == "only 2 observations" & 
+      vlsup_cat_V1 == "unsuppressed" & 
+      vlsup_cat_V2 == "unsuppressed" ~ "Never suppressed",
+    
+    group == "only 2 observations" & 
+      #(vlsup_cat_V1 == "unsuppressed" & vlsup_cat_V2 == "suppressed") | 
+      (vlsup_cat_V1 == "suppressed" & vlsup_cat_V2 == "unsuppressed") ~ "cycling",
+    
+    # Default case if none of the above conditions are met
+    TRUE ~ NA_character_  
+  ))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+vl_df_cleanfinal %>%
+  group_by(vl_status,intervention) %>%
+  summarise(
+    Count = n())
+
+```
+
+
+
+# exclude  all CALHIV in control group that had consistently been suppressed 
+
+```{r}
+vl_df_cleanfinal2 <- vl_df_cleanfinal %>%
+  filter(intervention == 1 | (intervention == 0 & vl_status != "suppressed"))
+
+```
+
+
+
+
+#Adding age from the ml dataframe 
+```{r}
+first_age <- ml_dfclean %>%
+  group_by(merge_id) %>%
+  summarise(age = first(age))
+
+# Merge the age column from first_age to vl_df_cleanfinal2 based on merge_id
+vl_df_cleanfinal2 <- vl_df_cleanfinal2 %>%
+  left_join(first_age, by = "merge_id")
+
+```
+
+
+```{r}
+
+long_data <- vl_df_cleanfinal2 %>%
+  filter(missing_V3==FALSE) %>% 
+  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3) %>%
+  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V2, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
+  mutate(
+    time = fct_recode(time, "Start" = "vlsup_cat_V1", "Midpoint" = "vlsup_cat_V2", "End" = "vlsup_cat_V3"),
+    intervention = factor(intervention, labels = c("Control", "Intervention"))
+  ) %>%
+  filter(!is.na(viral_load))  # Exclude NA values
+
+# Summarize the data to get counts
+count_data <- long_data %>%
+  group_by(time, intervention, viral_load) %>%
+  summarise(count = n(), .groups = 'drop')
+
+#Create the plot with specified facet layout and add count labels
+ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = 1) +  # Add count labels
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_blank()
+  ) +
+  labs(
+    x = "Time",
+    y = "CALHIV",
+    title = "Viral load by Time Point and and Treatment Group",
+    subtitle = "Viral Suppression increase over time for the participants with 3 or more viral load tests"  # Subtitle added here
+  ) +
+  scale_fill_manual(values = c("Control" = "red", "Intervention" = "#00BFC4"), labels = c("Control", "Intervention")) +
+  scale_x_discrete(labels = c("Start", "Midpoint", "End"))
+
+
+```
+#attempt to create a cohort heatmap 
+
+```{r}
+# Filter for intervention = 1 and missing_V3 is FALSE
+filtered_df <- vl_df_cleanfinal2 %>%
+  filter(intervention == 1, missing_V3 == FALSE)
+
+# Summarize the total and suppressed counts for "vlsup_cat_V1"  "vlsup_cat_V2" "vlsup_cat_V
+summary_table <- filtered_df %>%
+  select(contains("vlsup_cat_V")) %>%  # Select only the relevant columns
+  gather(key = "time_point", value = "suppression_status") %>%
+  group_by(time_point, suppression_status) %>%
+  summarise(count = n()) %>%
+  spread(key = suppression_status, value = count) %>%
+  mutate(Total = `suppressed` + `unsuppressed`)  # Add a column to calculate total counts
+# Assuming your dataframe is named 'filtered_df'
+summary_table <- filtered_df %>%
+  select(contains("vlsup_cat_V")) %>%  # Select only the relevant columns
+  gather(key = "time_point", value = "suppression_status") %>%
+  group_by(time_point, suppression_status) %>%
+  summarise(count = n()) %>%
+  spread(key = suppression_status, value = count, fill = 0) %>%  # Fill NAs with 0
+  mutate(Total = `suppressed` + `unsuppressed`,  # Calculate total counts
+         Percentage_Suppressed = (`suppressed` / Total) * 100)  # Calculate percentage suppressed
+
+# Convert to a format suitable for ggplot stacked bar chart
+summary_table_long <- summary_table %>%
+  mutate(unsuppressed = Total - suppressed) %>%
+  mutate(Percentage_Suppressed = (suppressed / Total) * 100) %>%
+  select(time_point, suppressed, unsuppressed, Percentage_Suppressed) %>%
+  gather(key = "status", value = "count", -time_point, -Percentage_Suppressed) %>%
+  group_by(time_point, status) %>%
+  mutate(label = if_else(status == "suppressed", as.character(Percentage_Suppressed), ""))
+# # Adjust the summary_table_long dataframe
+summary_table_long <- summary_table_long %>%
+  mutate(label = if_else(status == "suppressed", 
+                         sprintf("%.0f%%", Percentage_Suppressed), ""))  # Round to two decimal places
+
+# Reorder factor levels to have 'suppressed' at the bottom
+summary_table_long$status <- factor(summary_table_long$status, levels = c("unsuppressed", "suppressed"))
+summary_table_long$time_point <- factor(summary_table_long$time_point, 
+                                        levels = c("vlsup_cat_V1", "vlsup_cat_V2", "vlsup_cat_V3"),
+                                        labels = c("Start", "Mid", "End"))
+
+# Plot the stacked bar chart without a legend and with renamed time points
+stacked_bar <- ggplot(summary_table_long, aes(x = time_point, y = count, fill = status)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = label), position = position_stack(vjust = 0.5)) +
+  scale_fill_manual(values = c("unsuppressed" = "#E6E7E8", "suppressed" = "#004964")) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(
+    title = "Viral Suppression by Timepoint",
+    subtitle = "Viral suppression increased gradually each timepoint",
+    caption = "Source: PCM data",
+    fill = "Status",
+    y = "Total Count",
+    x = ""
+  )
+
+# Print the plot
+stacked_bar
+
+
+
+
+
+```
+
+# creating a panel chart to visualize age and viral suppression 
+
+
+```{r}
+
+# Filter out observations where age is NA
+# Filter out observations where age is NA and set the factor levels for age
+vl_df_cleanfinal2_filtered <- vl_df_cleanfinal2 %>%
+  filter(!is.na(age)) %>%
+  mutate(age = factor(age, levels = c("0-4 Years", "5-9 Years", "10-14 Years", "15-19 Years")))
+
+
+# First, summarize the counts of suppression categories within each age group and time point
+age_timepoint_summary <- vl_df_cleanfinal2_filtered %>%
+  gather(key = "time_point", value = "suppression_status", starts_with("vlsup_cat_V")) %>%
+  group_by(age, time_point, suppression_status) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  # Calculate the percentage of each suppression status within each age group and time point
+  group_by(age, time_point) %>%
+  mutate(total = sum(count),
+         percent = (count / total) * 100) %>%
+  # Spread the data for plotting
+  ungroup() %>%
+  select(-total, -count) %>%
+  spread(key = suppression_status, value = percent)
+age_timepoint_summary <- age_timepoint_summary %>%
+  mutate(time_point = factor(time_point, levels = c("vlsup_cat_V1", "vlsup_cat_V2", "vlsup_cat_V3"),
+                             labels = c("Start", "Midpoint", "End")))
+
+# Next, create the diverging stacked bar chart
+ggplot(age_timepoint_summary, aes(x = age, y = unsuppressed, fill = "unsuppressed")) +
+  geom_bar(stat = "identity") +
+  geom_bar(aes(y = -suppressed, fill = "suppressed"), stat = "identity") +
+  coord_flip() +
+  scale_fill_manual(values = c("suppressed" = "#004964", "unsuppressed" = "#8ce4fe")) +
+  scale_y_continuous(labels = abs) +  # To display positive labels on both sides
+  labs(
+    x = "Age Group",
+    y = "Percentage",
+    fill = "Suppression Status",
+    title = "Viral Suppression by Age and Timepoint"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  facet_wrap(~time_point, scales = "free_y")
+
+
+```
+
+```{r}
+ggplot(age_timepoint_summary, aes(x = age, y = suppressed, fill = "suppressed")) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(suppressed), "%")), 
+            position = position_stack(vjust = 0.5), 
+            color = "white", size = 3) +  # Add rounded percentage labels
+  coord_flip() +
+  scale_fill_manual(values = c("suppressed" = "#004964")) +
+  labs(
+    x = "",
+    y = "Percentage of Suppressed",
+    fill = "Suppression Status",
+    title = "Viral Suppression by Age and Timepoint",
+      subtitle = "All age bands showed improvement over the mid and end points",
+    caption = "Source: PCM data"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_blank(),  # Remove x-axis labels
+    axis.ticks.x = element_blank(),  # Remove x-axis ticks
+    panel.grid.major.x = element_blank(),  # Remove x-axis gridlines
+    axis.title.y = element_text(margin = margin(r = 20), angle = 0, vjust = 0.5),  # Adjust y-axis label position
+   # axis.line.y = element_line(color = "black"),  # Add y-axis line
+    axis.ticks.y = element_blank(),  # Remove y-axis ticks
+    #axis.text.y = element_blank()  # Remove y-axis text
+  ) +
+  facet_wrap(~time_point, scales = "free_y")
+
+
+```
+
+
+
+
+
+```{r}
+
+
+# Filter the data to include only 'suppressed' viral_load status
+suppressed_data <- long_data %>%
+  filter(viral_load == "suppressed") %>%
+  count(intervention, time) # count occurrences of 'suppressed' for each intervention and time
+
+# Check the structure to ensure it's correct before plotting
+print(suppressed_data)
+
+# Create the heatmap for 'suppressed' status
+ggplot(suppressed_data, aes(x = time, y = intervention, fill = n)) +
+  geom_tile(color = "white") +  # Use white borders for the tiles
+  scale_fill_gradient(low = "lavender", high = "blue") +  # Use a gradient from light to dark for the counts
+  labs(
+    x = "Time Point",
+    y = "Intervention Group",
+    fill = "Count",
+    title = "Change in Viral Load Status Over Time",
+    subtitle = "Count of Suppressed Status"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12)
+  )
+
+
+```
+# structuring the data for sankey visual 
+
+
+
+
+
+
+
+#analysis for CALHIV with 2 blood Viral loads 
+
+```{r}
+long_data <- vl_df_cleanfinal2 %>%
+  filter(missing_V3==TRUE) %>% 
+  select(merge_id, intervention, vlsup_cat_V1, vlsup_cat_V3) %>%
+  pivot_longer(cols = c(vlsup_cat_V1, vlsup_cat_V3), names_to = "time", values_to = "viral_load") %>%
+  mutate(
+    time = fct_recode(time, "Start" = "vlsup_cat_V1",  "End" = "vlsup_cat_V3"),
+    intervention = factor(intervention, labels = c("Control", "Intervention"))
+  ) %>%
+  filter(!is.na(viral_load))  # Exclude NA values
+
+# Summarize the data to get counts
+count_data <- long_data %>%
+  group_by(time, intervention, viral_load) %>%
+  summarise(count = n(), .groups = 'drop')
+
+#Create the plot with specified facet layout and add count labels
+ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = 1) +  # Add count labels
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 1) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_blank()
+  ) +
+  labs(
+    x = "Time",
+    y = "CALHIV",
+    title = "Viral load by Time Point and and Treatment Group",
+    subtitle = "Viral Suppression increase over time for the participants with 2 viral load tests"  # Subtitle added here
+  ) +
+  scale_fill_manual(values = c("Control" = "#F8766D", "Intervention" = "#00BFC4"), labels = c("Control", "Intervention")) +
+  scale_x_discrete(labels = c("Start",  "End"))
+
+```
+
+#creating final anaysis dataframe 
+```{r}
+# df_stat<- df_stat <- df1_filtered %>%
+#   select(
+#     merge_id,
+#     age,
+#     sex,
+#     group,
+#     recommend_services,
+#     healthy_symptom_free_frequency,
+#     problem_experience_last_2_weeks,
+#     support_from_family_friends,
+#     hiv_discrimination_past_month,
+#     factors_impacted_score_most,
+#     hiv_treatment_expenses_loan_sold,
+#     preferred_hiv_services_method,
+#     attach_to_chw,
+#     parenthood_status_combined,
+#     intervention,
+#     vlsup_cat_V1,
+#     vlsup_cat_V2,
+#     vlsup_cat_V3,
+#   )
+```
+
+
+
+
+```{r}
+
+# Your existing code to create the summary table
+summary_data <- vl_df_cleanfinal2 %>%
+  group_by(vl_status, intervention) %>%
+  summarise(Count = n(), .groups = 'drop')  # Ensure to drop grouping
+
+# Creating a bar plot
+ggplot(summary_data, aes(x = intervention, y = Count, fill = vl_status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(x = "Intervention", y = "Count", title = "Count of VL Outcomes by Intervention") +
+  scale_fill_brewer(palette = "Set1") +  # Optional: Use a color palette that works well for categorical data
+  theme(plot.title = element_text(hjust = 0.5))  # Center the plot title
+
+```
+# creating a treemap 
+```{r}
+library(treemapify)
+
+
+ggplot(summary_data, aes(area = Count, fill = vl_status, label = paste(vl_status, Count))) +
+  geom_treemap() +
+  geom_treemap_text(fontface = "italic", colour = "white", place = "centre", grow = TRUE) +
+  facet_wrap(~ intervention, scales = "free") +
+  labs(title = "Treemap of VL Outcome Counts by Intervention") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))  # Center the plot title
+```
+
+```{r}
+
+summary_data$intervention <- factor(summary_data$intervention, levels = c(0, 1), labels = c("Control", "Intervention"))
+
+#summary_data$intervention <- factor(summary_data$intervention, levels = c(0, 1), labels = c("Control", "Intervention"))
+
+# First, calculate the total counts for each intervention group to use for percentage calculation
+summary_data <- summary_data %>%
+  group_by(intervention) %>%
+  mutate(Total = sum(Count)) %>%
+  ungroup() %>%
+  mutate(Percentage = Count / Total * 100)  # Calculate percentages
+
+# Now create the heatmap with percentage labels
+ggplot(summary_data, aes(x = vl_status, y = intervention, fill = Count)) +
+  geom_tile() +  # Use geom_tile() for heatmap squares
+  scale_fill_gradient(low = "white", high = "#7f001c") +  # Color gradient for the count
+  geom_text(aes(label = paste0(round(Percentage, 0), "%")), color = "black", size = 3.5) +  # Add percentage labels
+  labs(x = "Outcome", 
+       y = "Group", 
+       title = " Comparison of Viral Load Outcomes by Group",
+       subtitle ="61% of the participants in the intervention group were cycling compared to 79% in the control",
+       fill = "Count") +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for better readability
+    plot.title = element_text(hjust = 0),  # Center the plot title
+    legend.position = ""  # Move the count legend to the bottom
+  )
+
+```
+
+
+
+
+```{r}
+
+# Set the path to the folder where you want to save the CSV
+output_folder <- "C:/Users/nmaina/Documents/R.Projects/UgandaMatrixMix/Dataout"
+
+# Define the full path to the CSV file within the output folder
+output_file_path <- file.path(output_folder, "Analysis_data.csv")
+
+# Write the vl_df1 DataFrame to the CSV file
+write.csv(df1_filtered, output_file_path, row.names = FALSE)
+
+```
+

@@ -33,14 +33,16 @@ library(stringr)
 ```{r}
 # data_folder <- "Data"
 # data_folder %>% return_latest()
-ml_path <- "../Dataout/masterclientlist.rds"
+#ml_path <- "../Dataout/masterclientlist.rds"
+ml_path <- "Dataout/masterclientlist.rds"
 ml_dfclean <- read_rds(ml_path)
 ```
 
 ```{r}
 # data_folder <- "Data"
 # data_folder %>% return_latest()
-vl_path <- "../Dataout/vldata.rds"
+#vl_path <- "../Dataout/vldata.rds"
+vl_path <- "Dataout/vldata.rds"
 vl_dfclean <- read_rds(vl_path)
 ```
 
@@ -134,9 +136,16 @@ observations_per_id <- vl_dfclean %>%
 # Define binwidth
 binwidth_value <- 1
 
+observations_per_id %>% distinct(num_observations)
+
 # Create histogram with bars and labels
 gg <- ggplot(observations_per_id, aes(x = num_observations)) +
-      geom_histogram(aes(y = ..count..), binwidth = binwidth_value, fill = hw_viking, color = "black") +
+      geom_histogram(aes(y = ..count..), 
+                     binwidth = binwidth_value, 
+                     #breaks = 0:max(observations_per_id$num_observations),
+                     fill = hw_viking, 
+                     linewidth = .5,
+                     color = grey10k) +
       geom_text(
         aes(label = scales::percent(..count.. / sum(..count..), accuracy = 0.1)),  # Rounds to one decimal place
         stat = "bin", 
@@ -144,9 +153,12 @@ gg <- ggplot(observations_per_id, aes(x = num_observations)) +
         vjust = -0.5, 
         color = "black"
       ) +
-      labs(title = "Distribution of Number of Viral Load Tests per CALHIV",
-           x = "Number of Viral Load Tests", 
-           y = "CALHIV") +
+      #scale_x_continuous(labels = 2:8) +
+      labs(title = "Distribution of CALHIV by the Number of Viral Load Tests",
+           subtitle = "47% of CALHIV have had 2 tests and 85% had 2 to 3 tests",
+           x = "", #"Number of Viral Load Tests", 
+           y = "" #CALHIV"
+           ) +
       si_style_ygrid() +
       ylim(0, NA)  # Set the y-axis limits to automatically accommodate the highest bar
 
@@ -161,7 +173,10 @@ binwidth_value <- 1
 
 # Create histogram with bars and labels, excluding 0% labels and with conditional fill colors
 gg <- ggplot(observations_per_id, aes(x = num_observations)) +
-      geom_histogram(aes(y = ..count.., fill = ifelse(num_observations == 2, "grey", hw_viking)), binwidth = binwidth_value, color = "black") +
+      geom_histogram(aes(y = ..count.., 
+                         fill = ifelse(num_observations == 2, "grey", hw_viking)), 
+                     binwidth = binwidth_value, 
+                     color = grey10k) +
       geom_text(
         aes(label = ifelse(..count.. / sum(..count..) == 0, "", scales::percent(..count.. / sum(..count..), accuracy = 0.1))), 
         stat = "bin", 
@@ -172,8 +187,9 @@ gg <- ggplot(observations_per_id, aes(x = num_observations)) +
       scale_fill_identity() +  # Use the colors directly
       labs(title = "Distribution of Number of Viral Load Tests per CALHIV",
            subtitle = "Over 50% of the CALHIV had more than 3 VLtests done over the project period",
-           x = "Number of Viral Load Tests", 
-           y = "CALHIV") +
+           x = "", #"Number of Viral Load Tests", 
+           y = "" #CALHIV"
+           ) +
         si_style_ygrid() +
       ylim(0, NA)  # Set the y-axis limits to automatically accommodate the highest bar
 
@@ -321,7 +337,7 @@ ggplot(parenthood_counts, aes(x = parenthood_status_combined, y = n, fill = pare
   theme_minimal() +
  labs(x = "Parenthood Status", y = "# CALHIV", title = "Parenthood Status for Intervention Participants", subtitle = "67% of the participants had biological parents as caregivers") +
   si_style_ygrid()+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x labels for readability
+  theme(axis.text.x = element_text(angle = 0, hjust = 1), # Rotate x labels for readability
       legend.position = "none", # Hide legend
      panel.grid.major = element_blank(), # Remove major grid lines
      panel.grid.minor = element_blank(), # Remove minor grid lines
@@ -452,12 +468,16 @@ long_data <- vl_df_cleanfinal2 %>%
 count_data <- long_data %>%
   group_by(time, intervention, viral_load) %>%
   summarise(count = n(), .groups = 'drop')
+```
+
+```{r}
+# Plot #1
 
 #Create the plot with specified facet layout and add count labels
 ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
   geom_bar(stat = "identity", position = "dodge") +
-  geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = 1) +  # Add count labels
-  facet_wrap(~ viral_load, scales = "free_y", nrow = 2) +
+  geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = 1.3) +  # Add count labels
+  facet_wrap(~ viral_load, scales = "free_y", nrow = 1) +
   theme_minimal() +
   theme(
     panel.grid.major = element_blank(),
@@ -474,7 +494,42 @@ ggplot(count_data, aes(x = time, y = count, fill = intervention)) +
   ) +
    si_style_ygrid()+
   scale_fill_manual(values = c("Control" = hw_lavender_haze, "Intervention" = "#9e94e0"), labels = c("Control", "Intervention")) +
-  scale_x_discrete(labels = c("Start", "Midpoint", "End"))
+  scale_x_discrete(labels = c("Start", "Midpoint", "End")) +
+  theme(legend.title = element_blank())
+```
+
+
+```{r}
+# Plot #2 Alternative
+
+count_data %>% 
+  mutate(viral_load = factor(
+    viral_load, levels = c("unsuppressed", "suppressed"), ordered = T)
+  ) %>% 
+  arrange(viral_load) %>% # force the suppression bar at the bottom
+  ggplot(aes(x = time, y = count, fill = viral_load)) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(data = count_data %>% filter(viral_load == "suppressed"),
+            aes(label = count), vjust = 1.3) +  # Add count labels
+  facet_wrap(~ intervention, scales = "free_y", nrow = 1) +
+  scale_fill_manual(values = c("unsuppressed" = grey10k, "suppressed" = "#9e94e0"), 
+                    labels = c("Unsuppressed", "Suppressed")) +
+  scale_x_discrete(labels = c("Start", "Midpoint", "End")) +
+  si_style_ygrid() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.title = element_blank(),
+    plot.caption = element_text(hjust = 1)) + # Align caption to the right
+  labs(
+    x = "",
+    y = "", # CALHIV",
+    title = "# of Patient with VLS in the Treatment Group improved over time",
+    subtitle = "Viral Suppression consitently increased for the participants with 3 or more viral load tests in the group",  # Subtitle added here
+    caption = " Note:Contol cohort was drawn from CALHIV who did not enrol in the intervetion at the site,
+                            Source: PCM 2024 data"
+  ) 
+   
 
 
 ```
@@ -605,6 +660,47 @@ ggplot(age_timepoint_summary, aes(x = age, y = unsuppressed, fill = "unsuppresse
         axis.title.x = element_blank(),
         plot.title = element_markdown())
         # si_style_nolines()
+
+```
+
+```{r}
+
+  # Next, create the diverging stacked bar chart
+df_vl_age <- age_timepoint_summary %>% 
+  pivot_longer(cols = ends_with("pressed"), names_to = "vl_status") %>% 
+  mutate(vl_status = factor(vl_status, levels = c("unsuppressed", "suppressed"), ordered = T)) %>% 
+  arrange(vl_status) 
+
+```
+
+```{r}
+
+df_vl_age %>% 
+  ggplot(aes(x = age, y = value, fill = vl_status)) +
+    geom_bar(stat = "identity", position = "stack") +
+    #geom_bar(aes(y = -suppressed, fill = "suppressed"), stat = "identity") +
+    geom_text(data = df_vl_age %>% filter(vl_status == "suppressed"),
+              aes(y = 2, label= paste0(round(value, digits = 0), "%")),
+              size = 4, color= "white", hjust = 0) +
+    facet_wrap(~time_point, scales = "free_x") +
+    coord_flip() +
+    scale_fill_manual(values = c("suppressed" = "#004964", "unsuppressed" = "#D5D7D8")) +
+    scale_y_continuous(labels = abs) +  # To display positive labels on both sides
+    labs(
+      x = "",
+      y = "Percentage",
+      fill = "Suppression Status",
+      title = "Viral <span style='color:#004964;font-weight:1000'>Suppression</span> by Age and Stage",
+      subtitle =  "Viral suppression consistently increased at each stage",
+      caption = " Note:Includes only participants in the intervention
+                  Source:PCM Uganda data",) +
+   si_style_ygrid()+
+    #theme_minimal() +
+    theme(legend.position = "none",
+          axis.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          plot.title = element_markdown())
+          # si_style_nolines()
 
 ```
 
